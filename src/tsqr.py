@@ -207,33 +207,66 @@ def tsqr(Ar,comm):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("-m", "--rows", help="number of rows", default=1000, type=int, dest="M")
-    parser.add_argument("-n", "--cols", help="number of cols", default=20, type=int,  dest="N")
+    parser.add_argument("-r", "--rows", help="Number of rows for input matrix; must be >> cols", type=int, default=5000)
+    parser.add_argument("-c", "--cols", help="Number of columns for input matrix", type=int, default=100)
+    parser.add_argument("-i", "--iterations", help="Number of iterations to run experiment. If > 1, first is ignored as warmup.", type=int, default=1)
+    parser.add_argument("-w", "--warmup", help="Number of warmup runs to perform before iterations.", type=int, default=0)
+    parser.add_argument("-K", "--check_result", help="Checks final result on CPU", action="store_true")
     args = parser.parse_args()
 
-    M=args.M
-    N=args.N
+    
+    NROWS=args.rows
+    NCOLS=args.cols
+    ITERS = args.iterations
+    WARMUP = args.warmup
+    CHECK_RESULT = args.check_result
 
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     npes = comm.Get_size()
 
-    A = partitioned_rand_mat(M,N,comm)
-    A = gather_mat(A,comm)
-    # if(not rank):
-    #     print(A)
-
-    Ar = scatter_mat(A,comm)
-    #print("rank %d : \n mat %s" %(rank,Ar))
-
-    [Qr,Rr] = tsqr(Ar,comm)
-    #print("rank %d \n Q%s \n R %s" %(rank,Qr,Rr))
-    #Qg = gather_mat(Q,comm)
-    #if(rank==0):
-    #    print(A-np.dot(Qg,R))
-    is_valid = check_result(Ar,Qr,Rr,comm)
     if(not rank):
-        print("QR result is valid :  %s " %is_valid)
+        print('%**********************************************************************************************%\n')
+        print('Config: rows=', NROWS, ' cols=', NCOLS, ' iterations=', ITERS, ' warmup=', WARMUP, ' check_result=', CHECK_RESULT, sep='', end='\n\n')
+
+    comm.barrier()
+
+    for iter in range(0,WARMUP + ITERS):
+        # generate a partitioned random matrix. 
+        Ar = partitioned_rand_mat(NROWS,NCOLS,comm)
+        
+        # Only to debug
+        #A = gather_mat(A,comm)
+        # if(not rank):
+        #     print(A)
+        #Ar = scatter_mat(A,comm)
+        #print("rank %d : \n mat %s" %(rank,Ar))
+
+        start = time()
+        [Qr,Rr] = tsqr(Ar,comm)
+        end =time()
+        
+        if ((iter >= WARMUP)):
+            t_dur = end-start
+            t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
+            t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
+            if(not rank):
+                print(f'(t_min,t_max):\t\"({t_max},{t_min})\"', end='')
+        
+        #print("rank %d \n Q%s \n R %s" %(rank,Qr,Rr))
+        #Qg = gather_mat(Q,comm)
+        #if(rank==0):
+        #    print(A-np.dot(Qg,R))
+
+        if CHECK_RESULT:
+            is_valid = check_result(Ar,Qr,Rr,comm)
+            if(not rank):
+                if is_valid:
+                    print("\nCorrect result!\n")
+                else:
+                    print("%***** ERROR: Incorrect final result!!! *****%")
+
+        
 
 
 
