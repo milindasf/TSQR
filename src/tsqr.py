@@ -15,9 +15,8 @@ import numpy as np
 from mpi4py import MPI
 import argparse
 import scipy 
-#import cupy as cp
+import cupy as cp
 from time import perf_counter as time
-
 
 '''
 @brief: Performs exclusive scan on array
@@ -205,12 +204,170 @@ def tsqr(Ar,comm):
     return [Q,R2]
 
 
+def tsqr_gpu(Ar, comm):
+
+    rank = comm.Get_rank()
+    npes = comm.Get_size()
+
+    Q=None
+    Q2=None
+    R=None
+
+    num_devices=cp.cuda.runtime.getDeviceCount()
+    dev_id = rank % num_devices
+    cp.cuda.Device(dev_id).use()
+    #print(num_devices)
+    #print("rank: %d using %d" %(rank,cp.cuda.Device(dev_id).id))
+
+    timer = {"H2D":0,"D2H":0, "COMPUTE":0}
+
+    # H2D transfer
+    start = time()
+    A_GPU = cp.array(Ar)
+    cp.cuda.stream.get_current_stream().synchronize()
+    end = time()
+    timer["H2D"] += (end-start)
+    
+    start = time()
+    [Q1, R1] = cp.linalg.qr(A_GPU,mode='reduced')
+    end = time()
+    timer["COMPUTE"] += (end-start)
+
+    # D2H transfer only R1 for the second pass of QR
+    start = time()
+    R1 = cp.asnumpy(R1)
+    cp.cuda.stream.get_current_stream().synchronize()
+    end = time()
+    timer["D2H"] += (end-start)
+
+    # gather R1 to rank 0 (root) processor
+    R1g = gather_mat(R1,comm)
+    if(not rank):
+        # dump R1 again to a Root proc. device
+        start = time()
+        R1g_GPU   = cp.array(R1g)
+        cp.cuda.stream.get_current_stream().synchronize()
+        end = time()
+        timer["H2D"] += (end-start)
+        
+        # compute second QR
+        start = time()
+        [Q2, R2] = cp.linalg.qr(R1g_GPU,mode='reduced')
+        end = time()
+        timer["COMPUTE"] += (end-start)
+
+        start = time()
+        Q2  = cp.asnumpy(Q2)
+        R   = cp.asnumpy(R2)
+        cp.cuda.stream.get_current_stream().synchronize()
+        end = time()
+        timer["D2H"] += (end-start)
+
+    R = comm.bcast(R)
+    Q2r = scatter_mat(Q2,comm)
+    
+    start = time()
+    Q2r_GPU = cp.array(Q2r)
+    cp.cuda.stream.get_current_stream().synchronize()
+    start = time()
+    timer["H2D"] += (end-start)
+
+    start = time()
+    Q = cp.matmul(Q1,Q2r_GPU)
+    end = time()
+    timer["COMPUTE"] += (end-start)
+
+    start = time()
+    Q = cp.asnumpy(Q)
+    cp.cuda.stream.get_current_stream().synchronize()
+    end  = time()
+    timer["H2D"] += (end-start)
+
+    #print("Q\n",Q)
+    #print("R\n",R)
+    return [Q,R,timer]
+
+
+def tsqr_driver(comm):
+
+    rank = comm.Get_rank()
+    npes = comm.Get_size()
+
+    if MODE == "MPI":
+        for iter in range(0,WARMUP + ITERS):
+            # generate a partitioned random matrix. 
+            Ar = partitioned_rand_mat(NROWS,NCOLS,comm)
+            
+            # Only to debug
+            #A = gather_mat(A,comm)
+            # if(not rank):
+            #     print(A)
+            #Ar = scatter_mat(A,comm)
+            #print("rank %d : \n mat %s" %(rank,Ar))
+
+            start = time()
+            [Qr,Rr] = tsqr(Ar,comm)
+            end =time()
+            
+            if ((iter >= WARMUP)):
+                t_dur = end-start
+                t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
+                t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
+                if(not rank):
+                    print(f'(t_min,t_max):\t\"({t_max},{t_min})\"\n', end='')
+            
+            #print("rank %d \n Q%s \n R %s" %(rank,Qr,Rr))
+            #Qg = gather_mat(Q,comm)
+            #if(rank==0):
+            #    print(A-np.dot(Qg,R))
+
+            if CHECK_RESULT:
+                is_valid = check_result(Ar,Qr,Rr,comm)
+                if(not rank):
+                    if is_valid:
+                        print("\nCorrect result!\n")
+                    else:
+                        print("%***** ERROR: Incorrect final result!!! *****%")
+
+    elif MODE == "MPI+CUDA":
+        
+        for iter in range(0,WARMUP+ITERS):
+            
+            # gen. partitioned matrix. 
+            Ar = partitioned_rand_mat(NROWS,NCOLS,comm)
+
+            start = time()
+            [Qr,Rr,_] = tsqr_gpu(Ar,comm)
+            end =time()
+            
+            if ((iter >= WARMUP)):
+                t_dur = end-start
+                t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
+                t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
+                if(not rank):
+                    print(f'(t_min,t_max):\t\"({t_max},{t_min})\"\n', end='')
+                    print("internal_timers %s"%_)
+            
+            if CHECK_RESULT:
+                is_valid = check_result(Ar,Qr,Rr,comm)
+                if(not rank):
+                    if is_valid:
+                        print("\nCorrect result!\n")
+                    else:
+                        print("%***** ERROR: Incorrect final result!!! *****%")
+        
+        
+
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-r", "--rows", help="Number of rows for input matrix; must be >> cols", type=int, default=5000)
     parser.add_argument("-c", "--cols", help="Number of columns for input matrix", type=int, default=100)
     parser.add_argument("-i", "--iterations", help="Number of iterations to run experiment. If > 1, first is ignored as warmup.", type=int, default=1)
-    parser.add_argument("-w", "--warmup", help="Number of warmup runs to perform before iterations.", type=int, default=0)
+    parser.add_argument("-w", "--warmup", help="Number of warmup runs to perform before iterations.", 
+    type=int, default=0)
+    parser.add_argument("-M", "--mode", help="execution mode: MPI, MPI+GPU",type=str,default="MPI")
     parser.add_argument("-K", "--check_result", help="Checks final result on CPU", action="store_true")
     args = parser.parse_args()
 
@@ -219,7 +376,9 @@ if __name__ == "__main__":
     NCOLS=args.cols
     ITERS = args.iterations
     WARMUP = args.warmup
+    MODE = args.mode
     CHECK_RESULT = args.check_result
+    
 
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
@@ -230,41 +389,9 @@ if __name__ == "__main__":
         print('Config: rows=', NROWS, ' cols=', NCOLS, ' iterations=', ITERS, ' warmup=', WARMUP, ' check_result=', CHECK_RESULT, sep='', end='\n\n')
 
     comm.barrier()
+    tsqr_driver(comm)
 
-    for iter in range(0,WARMUP + ITERS):
-        # generate a partitioned random matrix. 
-        Ar = partitioned_rand_mat(NROWS,NCOLS,comm)
-        
-        # Only to debug
-        #A = gather_mat(A,comm)
-        # if(not rank):
-        #     print(A)
-        #Ar = scatter_mat(A,comm)
-        #print("rank %d : \n mat %s" %(rank,Ar))
-
-        start = time()
-        [Qr,Rr] = tsqr(Ar,comm)
-        end =time()
-        
-        if ((iter >= WARMUP)):
-            t_dur = end-start
-            t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
-            t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
-            if(not rank):
-                print(f'(t_min,t_max):\t\"({t_max},{t_min})\"', end='')
-        
-        #print("rank %d \n Q%s \n R %s" %(rank,Qr,Rr))
-        #Qg = gather_mat(Q,comm)
-        #if(rank==0):
-        #    print(A-np.dot(Qg,R))
-
-        if CHECK_RESULT:
-            is_valid = check_result(Ar,Qr,Rr,comm)
-            if(not rank):
-                if is_valid:
-                    print("\nCorrect result!\n")
-                else:
-                    print("%***** ERROR: Incorrect final result!!! *****%")
+    
 
         
 
