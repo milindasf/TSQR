@@ -38,6 +38,7 @@ class profile_t:
         self.seconds+=o.seconds
         self.snap+=o.snap
         self.iter+=o.iter
+        return self
 
     def start(self):
         self._pri_time = time()
@@ -323,6 +324,9 @@ def block_gpu_matmult(Ar,Br, dev_id,loc={'A':'H','B':'H','C':'H'}):
 
     cp.cuda.Device(dev_id).use()
 
+    A_GPU=Ar
+    B_GPU=Br
+
     if(loc['A']=='H'  or loc['B']=='H'):
         t_h2d.start()
         if(loc['A']=='H'):
@@ -337,6 +341,7 @@ def block_gpu_matmult(Ar,Br, dev_id,loc={'A':'H','B':'H','C':'H'}):
 
         cp.cuda.stream.get_current_stream().synchronize()
         t_h2d.stop()
+    
     
     t_kernel_gpu.start()
     C_GPU = cp.matmul(A_GPU,B_GPU)
@@ -377,6 +382,10 @@ def tsqr_shared_mem_gpu_v1(A,num_threads):
 
     A_blocked = shared_mem_block_part(A,num_threads)
     loc={'A':'H','Q':'D','R':'H'}
+
+    t_h2d         = [profile_t("H2D")]*num_threads
+    t_d2h         = [profile_t("D2H")]*num_threads
+    t_kernel_gpu  = [profile_t("kernel_gpu")]*num_threads
 
     result = list()
     with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
@@ -427,13 +436,15 @@ def tsqr_shared_mem_gpu_v1(A,num_threads):
     for m in result:
         Q2_CPU.append(m.result()[0])
         r3_time.append(m.result()[1])
-    
-    timer={"H2D":0,"D2H":0, "COMPUTE":0}
-    for k in timer.keys():
-        timer[k] += r1_time[0][k] + r2_time[0][k] + r3_time[0][k]
+
+    for i in range(num_threads):
+        t_h2d[i] = r1_time[i][0] + r2_time[i][0] + r3_time[i][0]
+        t_kernel_gpu[i] = r1_time[i][1] + r2_time[i][1] + r3_time[i][1]
+        t_d2h[i] = r1_time[i][2] + r2_time[i][2] + r3_time[i][2]
 
     Q=shared_mem_unblock(Q2_CPU)
-    return [Q,R,timer]
+    _perf_stat = [t_h2d,t_kernel_gpu,t_d2h]
+    return [Q,R,_perf_stat]
 
 
 '''
@@ -465,7 +476,7 @@ def tsqr_mpi_gpu_v1(Ar, comm):
     [Q1,R1,ts]=block_gpu_qr(Ar,dev_id,loc={'A':'H','Q':'D','R':'H'})
 
     t_h2d += ts[0]
-    t_kernel_gpu += t_h2d + ts[1]
+    t_kernel_gpu +=ts[1]
     t_d2h += ts[2]
 
     
@@ -475,9 +486,9 @@ def tsqr_mpi_gpu_v1(Ar, comm):
     R1g = comm.bcast(R1g)
     t_mpi_comm.stop()
     
-    [Q2,R,ts]=block_gpu_qr(Ar,dev_id,loc={'A':'H','Q':'D','R':'H'})
+    [Q2,R,ts]=block_gpu_qr(R1g,dev_id,loc={'A':'H','Q':'D','R':'H'})
     t_h2d += ts[0]
-    t_kernel_gpu += t_h2d + ts[1]
+    t_kernel_gpu += ts[1]
     t_d2h += ts[2]
 
     [rb,re] = row_partition_bounds(R1g.shape[0],rank,npes)
@@ -485,7 +496,7 @@ def tsqr_mpi_gpu_v1(Ar, comm):
     
     [Q,ts]=block_gpu_matmult(Q1,Q2r,dev_id,loc={'A':'D','B':'D','C':'H'})
     t_h2d += ts[0]
-    t_kernel_gpu += t_h2d + ts[1]
+    t_kernel_gpu += ts[1]
     t_d2h += ts[2]
 
     _pref_stat = [ t_mpi_comm, t_h2d, t_d2h, t_kernel_gpu ]
@@ -519,9 +530,9 @@ def tsqr_mpi_gpu_v2(Ar, comm):
     
     # perform blocked QR, 
     [Q1,R1,ts]=block_gpu_qr(Ar,dev_id,loc={'A':'H','Q':'D','R':'H'})
-
+    
     t_h2d += ts[0]
-    t_kernel_gpu += t_h2d + ts[1]
+    t_kernel_gpu +=ts[1]
     t_d2h += ts[2]
 
     
@@ -531,9 +542,9 @@ def tsqr_mpi_gpu_v2(Ar, comm):
     t_mpi_comm.stop()
     
     if(not rank):
-        [Q2,R,ts]=block_gpu_qr(Ar,dev_id,loc={'A':'H','Q':'H','R':'H'})
+        [Q2,R,ts]=block_gpu_qr(R1g,dev_id,loc={'A':'H','Q':'H','R':'H'})
         t_h2d += ts[0]
-        t_kernel_gpu += t_h2d + ts[1]
+        t_kernel_gpu += ts[1]
         t_d2h += ts[2]
     
         
@@ -541,10 +552,10 @@ def tsqr_mpi_gpu_v2(Ar, comm):
     R = comm.bcast(R)
     Q2r = scatter_mat(Q2,comm)
     t_mpi_comm.stop()
-
-    [Q,ts]=block_gpu_matmult(Q1,Q2r,dev_id,loc={'A':'D','B':'H','C':'D'})
+    
+    [Q,ts]=block_gpu_matmult(Q1,Q2r,dev_id,loc={'A':'D','B':'H','C':'H'})
     t_h2d += ts[0]
-    t_kernel_gpu += t_h2d + ts[1]
+    t_kernel_gpu += ts[1]
     t_d2h += ts[2]
 
     _pref_stat = [ t_mpi_comm, t_h2d, t_d2h, t_kernel_gpu ]
@@ -625,7 +636,7 @@ def tsqr_driver(comm):
 
             t_overall = profile_t("total")
             t_overall.start()
-            [Qr,Rr,ts] = tsqr_mpi_gpu_v2(Ar,comm)
+            [Qr,Rr,ts] = tsqr_mpi_gpu_v1(Ar,comm)
             t_overall.stop()
             
             if ((iter >= WARMUP)):
@@ -663,6 +674,7 @@ def tsqr_driver(comm):
                         print("\nCorrect result!\n")
                     else:
                         print("%***** ERROR: Incorrect final result!!! *****%")
+
     elif MODE == "SM+CUDA":
         for iter in range(0,WARMUP+ITERS):
             
@@ -678,29 +690,22 @@ def tsqr_driver(comm):
                 if(not t_header):
                     header="iter\ttotal_min\ttotal_max"
                     for t in ts:
-                        header+="\t"+t.name+"_min"
-                        header+="\t"+t.name+"_max"
-                    
-                    if(not rank):
-                        print(header)
+                        header+="\t"+t[0].name+"_min"
+                        header+="\t"+t[0].name+"_max"
+                    print(header)
                     t_header=True
                 
                 t_dur = t_overall.seconds
-                t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
-                t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
-                if(not rank):
-                    t_= f"{iter}\t{t_min:.12f}\t{t_max:.12f}"
+                t_min = t_dur
+                t_max = t_dur
+                t_= f"{iter}\t{t_min:.12f}\t{t_max:.12f}"
                     
                 for t in ts:
-                    t_dur = t.seconds
-                    t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
-                    t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
-                    if(not rank):
-                        t_= t_ + f"\t{t_min:.12f}\t{t_max:.12f}"
+                    t_min = min(t,key=lambda a: a.seconds).seconds
+                    t_max = max(t,key=lambda a: a.seconds).seconds
+                    t_= t_ + f"\t{t_min:.12f}\t{t_max:.12f}"
 
-                
-                if(not rank):
-                    print(t_)
+                print(t_)
 
             if CHECK_RESULT:
                 is_valid = shared_mem_check_result(Ar,Qr,Rr)
