@@ -15,6 +15,7 @@ from re import A
 import numpy as np
 from mpi4py import MPI
 import argparse
+from numpy.core.fromnumeric import sort
 import scipy 
 import cupy as cp
 from time import perf_counter as time
@@ -22,21 +23,62 @@ import concurrent.futures
 import queue
 import os as os
 
-'''
-@brief: Performs exclusive scan on array
-'''
-# def scan(x,mode='e'):
-#     x  = list(x)
-#     xs = list(x)
-#     if(mode=='e'):
-#         xs[0] = 0
-#         for i in range(1,len(x)):
-#             xs[i] = xs[i-1] + x[i-1]
-#     else:
-#         print("scan mode not supported")
-#     return xs
+
+class profile_t:
+
+    def __init__(self,name):
+        self.name = name
+        self.seconds=0
+        self.snap=0
+        self._pri_time =0
+        self.iter =0
+
+    def __add__(self,o):
+        assert(self.name==o.name)
+        self.seconds+=o.seconds
+        self.snap+=o.snap
+        self.iter+=o.iter
+
+    def start(self):
+        self._pri_time = time()
+    
+    def stop(self):
+        self.seconds-=self._pri_time
+        self.snap=-self._pri_time
+
+        self._pri_time = time()
+
+        self.seconds +=self._pri_time
+        self.snap  += self._pri_time
+        self.iter+=1
 
     
+
+
+def accumulate_counters(t1,t2,is_sorted=False):
+    
+    if(not is_sorted):
+        t1=sort(t1,key=lambda w: w.name)
+        t2=sort(t2,key=lambda w: w.name)
+    
+    assert (len(t1)== len(t2))
+    for i in range(len(t1)):
+        assert(t1[i].name ==  t2[i].name)
+        t1[i].seconds += t2[i].seconds
+        t1[i].snap    += t2[i].snap
+        t1[i].iter    += t2[i].iter
+
+    return
+        
+'''
+Computes the row-wise partition bounds. 
+'''
+def row_partition_bounds(nrows,rank,npes):
+    assert(nrows >=npes)
+    rb = ((rank) * nrows ) // npes
+    re = ((rank+1)  * nrows ) //npes
+    return [rb,re]
+
 
 '''
 @brief generates a partitioned random matrix
@@ -47,9 +89,7 @@ matrix is partitioned row wise
 def partitioned_rand_mat(m,n,comm):
     rank = comm.Get_rank()
     npes = comm.Get_size()
-
-    rb = ((rank) * m ) // npes
-    re = ((rank+1)  * m ) //npes
+    [rb,re]=row_partition_bounds(m,rank,npes)
     num_rows= re-rb
     return np.random.rand(num_rows,n)
 
@@ -104,9 +144,8 @@ def scatter_mat(A,comm,root=0):
     # print(data_type)
     
     ## row begin and end for the scattering
-    rb = (rank * rows)//npes
-    re = ((rank+1)*rows)//npes
-
+    [rb,re]=row_partition_bounds(rows,rank,npes)
+    
     ss_counts = (re-rb)*cols
     ss_counts = comm.allgather(ss_counts)
 
@@ -178,9 +217,6 @@ def shared_mem_check_result(Ar,Qr,Rr):
     is_valid =  (is_prod_valid and is_Q_valid and is_upper_R)
     return is_valid
 
-
-
-
 '''
 Pure MPI only TSQR without recursive splitting, 
 Recursive splitting will require recursive communicator
@@ -195,33 +231,266 @@ def tsqr(Ar,comm):
     Q2=None
     R2=None
 
+    t_compute = profile_t("compute")
+    t_comm    = profile_t("comm")
+
     # local QR computation. 
+    t_compute.start()
     [Qr,Rr] =np.linalg.qr(Ar,mode='reduced')
-    
-    rows = Rr.shape[0]
-    cols = Rr.shape[1]
-    rows=comm.allreduce(rows,op=MPI.SUM)
-    Rr_global_sz = rows*cols
-    #print(Rr_global_sz)
+    t_compute.stop()
+
+    # rows = Rr.shape[0]
+    # cols = Rr.shape[1]
+    # rows=comm.allreduce(rows,op=MPI.SUM)
+    # Rr_global_sz = rows*cols
+    # #print(Rr_global_sz)
 
     # round 2 qr with gather, 
-    # Note : if Rr cannot be gatthered to 
+    # for smaller n assumes, Rr can be gathered to a single process, 
+    # Memory cost : npes * (cols^2)
+    # Otherwise we can do recursive split which is not implemented. 
+    t_comm.start()
     R = gather_mat(Rr,comm)
+    t_comm.stop()
+
     if(rank==0):
+        t_compute.start()
         [Q2,R2] = np.linalg.qr(R,mode='reduced')
-        
-
+        t_compute.stop()
+    
     #bcast computed R2, R = Q2 x R2
-    R2 = comm.bcast(R2)
-
+    t_comm.start()
+    R = comm.bcast(R2)
     # scatter the Q2 and compute the corrected Q for A. 
     Q2r = scatter_mat(Q2,comm)
-    #print("Q2r : %s" %Q2r)
-    Q = np.matmul(Qr,Q2r)
-    # if(rank ==0):
-    #     print("Q : %s" %Q)
-    return [Q,R2]
+    t_comm.stop()
 
+    t_compute.start()
+    Q = np.matmul(Qr,Q2r)
+    t_compute.stop()
+
+    _perf_stats=[t_comm,t_compute]
+    return [Q,R,_perf_stats]
+
+
+'''
+Performes GPU QR decomposition, 
+timer values will get accumulated 
+loc denotes the final location of the variable.
+'H': For host, 'D': For device.  
+'''
+def block_gpu_qr(Ar,dev_id,loc={'A':'H','Q':'H','R':'H'}):
+    
+    t_h2d         = profile_t("H2D")
+    t_d2h         = profile_t("D2H")
+    t_kernel_gpu  = profile_t("kernel_gpu")
+
+    cp.cuda.Device(dev_id).use()
+    
+    if(loc['A']=='H'):
+        # H2D transfer
+        t_h2d.start()
+        A_GPU = cp.array(Ar)
+        cp.cuda.stream.get_current_stream().synchronize()
+        t_h2d.stop()
+    else:
+        A_GPU=Ar
+    
+    t_kernel_gpu.start()
+    [Q1, R1] = cp.linalg.qr(A_GPU,mode='reduced')
+    t_kernel_gpu.stop()
+    
+
+    if (loc['Q']=='H' or loc['R']=='H'):
+
+        t_d2h.start()
+        if(loc['R']=='H'):
+            R1 = cp.asnumpy(R1)
+    
+        if(loc['Q']=='H'):
+            Q1 = cp.asnumpy(Q1)
+        cp.cuda.stream.get_current_stream().synchronize()
+        t_d2h.stop()
+    
+    _perf_stat= [t_h2d,t_kernel_gpu,t_d2h]
+    return [Q1,R1,_perf_stat]
+
+def block_gpu_matmult(Ar,Br, dev_id,loc={'A':'H','B':'H','C':'H'}):
+    
+    t_h2d         = profile_t("H2D")
+    t_d2h         = profile_t("D2H")
+    t_kernel_gpu  = profile_t("kernel_gpu")
+
+    cp.cuda.Device(dev_id).use()
+
+    if(loc['A']=='H'  or loc['B']=='H'):
+        t_h2d.start()
+        if(loc['A']=='H'):
+            A_GPU = cp.array(Ar)
+        else:
+            A_GPU=Ar
+
+        if(loc['B']=='H'):
+            B_GPU = cp.array(Br)
+        else:
+            B_GPU=Br
+
+        cp.cuda.stream.get_current_stream().synchronize()
+        t_h2d.stop()
+    
+    t_kernel_gpu.start()
+    C_GPU = cp.matmul(A_GPU,B_GPU)
+    t_kernel_gpu.stop()
+
+    if(loc['C']=='H'):
+        t_d2h.start()
+        C = cp.asnumpy(C_GPU)
+        cp.cuda.stream.get_current_stream().synchronize()
+        t_d2h.stop()
+    else:
+        C=C_GPU
+    
+    _perf_stat= [t_h2d,t_kernel_gpu,t_d2h]
+    return [C,_perf_stat]
+
+'''
+Shared memory scatter
+'''
+def shared_mem_block_part(A,num_threads):
+
+    [rows,cols] = A.shape
+    A_blocked = list()
+    for i in range(0,num_threads):
+        [rb,re]=row_partition_bounds(rows,i,num_threads)
+        A_blocked.append(A[rb:re,:])
+    
+    assert(len(A_blocked) == num_threads)
+    return A_blocked
+
+'''
+Shared memory gather
+'''
+def shared_mem_unblock(A_blocked):
+    return np.concatenate(A_blocked)
+
+def tsqr_shared_mem_gpu_v1(A,num_threads):
+
+    A_blocked = shared_mem_block_part(A,num_threads)
+    loc={'A':'H','Q':'D','R':'H'}
+
+    result = list()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+        for t_id in range(num_threads):
+            result.append(executor.submit(block_gpu_qr,A_blocked[t_id],t_id,loc))
+
+    
+    Q1_GPU  = list()
+    R1_CPU  = list()
+    r1_time = list()
+
+    for m in result:
+        #print(m.result())
+        Q1_GPU.append (m.result()[0])
+        R1_CPU.append (m.result()[1])
+        r1_time.append(m.result()[2])
+    
+    R1=shared_mem_unblock(R1_CPU)
+    loc={'A':'H','Q':'D','R':'H'}
+    result =list()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+        for t_id in range(num_threads):
+            result.append(executor.submit(block_gpu_qr,R1,t_id,loc))
+
+    Q2_GPU  = list()
+    R2_CPU  = list()
+    r2_time = list()
+    
+    for m in result:
+        Q2_GPU.append (m.result()[0])
+        R = m.result()[1]
+        r2_time.append(m.result()[2])
+
+    #print(Q2_GPU)
+    #print(R)
+    loc={'A':'D','B':'D','C':'H'}
+    [rows,cols] = R1.shape
+    result=list()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+        for t_id in range(num_threads):
+            # partition boundary. 
+            [rb,re]=row_partition_bounds(rows,t_id,num_threads)
+            result.append(executor.submit(block_gpu_matmult,Q1_GPU[t_id],Q2_GPU[t_id][rb:re,:],t_id,loc))
+            
+    r3_time=list()
+    Q2_CPU=list()
+    for m in result:
+        Q2_CPU.append(m.result()[0])
+        r3_time.append(m.result()[1])
+    
+    timer={"H2D":0,"D2H":0, "COMPUTE":0}
+    for k in timer.keys():
+        timer[k] += r1_time[0][k] + r2_time[0][k] + r3_time[0][k]
+
+    Q=shared_mem_unblock(Q2_CPU)
+    return [Q,R,timer]
+
+
+'''
+Performs multi-gpu on multi-nodes with MPI parallelization. 
+Can implement in various versions. 
+More duplication less data movement version. 
+'''
+def tsqr_mpi_gpu_v1(Ar, comm):
+
+    rank = comm.Get_rank()
+    npes = comm.Get_size()
+
+    Q=None
+    Q2=None
+    R=None
+
+    num_devices=cp.cuda.runtime.getDeviceCount()
+    dev_id = rank % num_devices
+    cp.cuda.Device(dev_id).use()
+    #print(num_devices)
+    #print("rank: %d using %d" %(rank,cp.cuda.Device(dev_id).id))
+
+    t_h2d         = profile_t("H2D")
+    t_d2h         = profile_t("D2H")
+    t_mpi_comm    = profile_t("mpi_comm")
+    t_kernel_gpu  = profile_t("kernel_gpu")
+    
+    # perform blocked QR, 
+    [Q1,R1,ts]=block_gpu_qr(Ar,dev_id,loc={'A':'H','Q':'D','R':'H'})
+
+    t_h2d += ts[0]
+    t_kernel_gpu += t_h2d + ts[1]
+    t_d2h += ts[2]
+
+    
+    # gather R1 to rank 0 (root) processor
+    t_mpi_comm.start()
+    R1g = gather_mat(R1,comm)
+    R1g = comm.bcast(R1g)
+    t_mpi_comm.stop()
+    
+    [Q2,R,ts]=block_gpu_qr(Ar,dev_id,loc={'A':'H','Q':'D','R':'H'})
+    t_h2d += ts[0]
+    t_kernel_gpu += t_h2d + ts[1]
+    t_d2h += ts[2]
+
+    [rb,re] = row_partition_bounds(R1g.shape[0],rank,npes)
+    Q2r = Q2[rb:re,:]
+    
+    [Q,ts]=block_gpu_matmult(Q1,Q2r,dev_id,loc={'A':'D','B':'D','C':'H'})
+    t_h2d += ts[0]
+    t_kernel_gpu += t_h2d + ts[1]
+    t_d2h += ts[2]
+
+    _pref_stat = [ t_mpi_comm, t_h2d, t_d2h, t_kernel_gpu ]
+    
+    return [Q,R,_pref_stat]
 
 '''
 Performs multi-gpu on multi-nodes with MPI parallelization. 
@@ -243,306 +512,52 @@ def tsqr_mpi_gpu_v2(Ar, comm):
     #print(num_devices)
     #print("rank: %d using %d" %(rank,cp.cuda.Device(dev_id).id))
 
-    timer = {"H2D":0,"D2H":0, "COMPUTE":0}
-
-    # H2D transfer
-    start = time()
-    A_GPU = cp.array(Ar)
-    cp.cuda.stream.get_current_stream().synchronize()
-    end = time()
-    timer["H2D"] += (end-start)
+    t_h2d         = profile_t("H2D")
+    t_d2h         = profile_t("D2H")
+    t_mpi_comm    = profile_t("mpi_comm")
+    t_kernel_gpu  = profile_t("kernel_gpu")
     
-    start = time()
-    [Q1, R1] = cp.linalg.qr(A_GPU,mode='reduced')
-    end = time()
-    timer["COMPUTE"] += (end-start)
+    # perform blocked QR, 
+    [Q1,R1,ts]=block_gpu_qr(Ar,dev_id,loc={'A':'H','Q':'D','R':'H'})
 
-    # D2H transfer only R1 for the second pass of QR
-    start = time()
-    R1 = cp.asnumpy(R1)
-    cp.cuda.stream.get_current_stream().synchronize()
-    end = time()
-    timer["D2H"] += (end-start)
+    t_h2d += ts[0]
+    t_kernel_gpu += t_h2d + ts[1]
+    t_d2h += ts[2]
 
+    
     # gather R1 to rank 0 (root) processor
+    t_mpi_comm.start()
     R1g = gather_mat(R1,comm)
+    t_mpi_comm.stop()
+    
     if(not rank):
-        # dump R1 again to a Root proc. device
-        start = time()
-        R1g_GPU   = cp.array(R1g)
-        cp.cuda.stream.get_current_stream().synchronize()
-        end = time()
-        timer["H2D"] += (end-start)
+        [Q2,R,ts]=block_gpu_qr(Ar,dev_id,loc={'A':'H','Q':'H','R':'H'})
+        t_h2d += ts[0]
+        t_kernel_gpu += t_h2d + ts[1]
+        t_d2h += ts[2]
+    
         
-        # compute second QR
-        start = time()
-        [Q2, R2] = cp.linalg.qr(R1g_GPU,mode='reduced')
-        end = time()
-        timer["COMPUTE"] += (end-start)
-
-        start = time()
-        Q2  = cp.asnumpy(Q2)
-        R   = cp.asnumpy(R2)
-        cp.cuda.stream.get_current_stream().synchronize()
-        end = time()
-        timer["D2H"] += (end-start)
-
+    t_mpi_comm.start()
     R = comm.bcast(R)
     Q2r = scatter_mat(Q2,comm)
+    t_mpi_comm.stop()
+
+    [Q,ts]=block_gpu_matmult(Q1,Q2r,dev_id,loc={'A':'D','B':'H','C':'D'})
+    t_h2d += ts[0]
+    t_kernel_gpu += t_h2d + ts[1]
+    t_d2h += ts[2]
+
+    _pref_stat = [ t_mpi_comm, t_h2d, t_d2h, t_kernel_gpu ]
     
-    start = time()
-    Q2r_GPU = cp.array(Q2r)
-    cp.cuda.stream.get_current_stream().synchronize()
-    end = time()
-    timer["H2D"] += (end-start)
+    return [Q,R,_pref_stat]
 
-    start = time()
-    Q = cp.matmul(Q1,Q2r_GPU)
-    end = time()
-    timer["COMPUTE"] += (end-start)
-
-    start = time()
-    Q = cp.asnumpy(Q)
-    cp.cuda.stream.get_current_stream().synchronize()
-    end  = time()
-    timer["D2H"] += (end-start)
-
-    #print("Q\n",Q)
-    #print("R\n",R)
-    return [Q,R,timer]
-
-
-'''
-Shared memory scatter
-'''
-def shared_mem_block_part(A,num_threads):
-
-    [rows,cols] = A.shape
-    A_blocked = list()
-    for i in range(0,num_threads):
-        rb = ((i) * rows) // num_threads
-        re = ((i+1) * rows) // num_threads 
-
-        A_blocked.append(A[rb:re,:])
-    
-    assert(len(A_blocked) == num_threads)
-    return A_blocked
-
-'''
-Shared memory gather
-'''
-def shared_mem_unblock(A_blocked):
-    return np.concatenate(A_blocked)
-
-'''
-Performes GPU QR decomposition, 
-timer values will get accumulated 
-loc denotes the final location of the variable.
-'H': For host, 'D': For device.  
-'''
-def _sm_block_gpu_qr(Ar,dev_id,loc={'A':'H','Q':'H','R':'H'}):
-    #print(dev_id)
-    timer = {"H2D":0,"D2H":0, "COMPUTE":0}
-    # select the GPU device. 
-    cp.cuda.Device(dev_id).use()
-    
-    if(loc['A']=='H'):
-        # H2D transfer
-        start = time()
-        A_GPU = cp.array(Ar)
-        cp.cuda.stream.get_current_stream().synchronize()
-        end = time()
-        timer["H2D"] += (end-start)
-        #print("transfer ended")
-    else:
-        A_GPU=Ar
-    
-    start = time()
-    [Q1, R1] = cp.linalg.qr(A_GPU,mode='reduced')
-    end = time()
-    timer["COMPUTE"] += (end-start)
-    #print("QR ended")
-
-    if (loc['Q']=='H' or loc['R']=='H'):
-        start = time()
-        if(loc['R']=='H'):
-            R1 = cp.asnumpy(R1)
-    
-        if(loc['Q']=='H'):
-            Q1 = cp.asnumpy(Q1)
-        cp.cuda.stream.get_current_stream().synchronize()
-        end = time()
-        timer["D2H"] += (end-start)
-    #print("Transfer back end")
-    
-    return [Q1,R1,timer]
-
-def _sm_block_gpu_matmult(Ar,Br, dev_id,loc={'A':'H','B':'H','C':'H'}):
-    
-    timer={"H2D":0,"D2H":0, "COMPUTE":0}
-    cp.cuda.Device(dev_id).use()
-
-    if(loc['A']=='H'):
-        start = time()
-        A_GPU = cp.array(Ar)
-        cp.cuda.stream.get_current_stream().synchronize()
-        end = time()
-        timer["H2D"] += (end-start)
-    else:
-        A_GPU=Ar
-
-    if(loc['B']=='H'):
-        start = time()
-        B_GPU = cp.array(Br)
-        cp.cuda.stream.get_current_stream().synchronize()
-        end = time()
-        timer["H2D"] += (end-start)
-    else:
-        B_GPU=Br
-    
-    start = time()
-    C_GPU = cp.matmul(A_GPU,B_GPU)
-    end = time()
-    timer["COMPUTE"] += (end-start)
-    #print('matmult ended')
-
-    if(loc['C']=='H'):
-        start = time()
-        C = cp.asnumpy(C_GPU)
-        cp.cuda.stream.get_current_stream().synchronize()
-        end = time()
-        timer["D2H"] += (end-start)
-    else:
-        C=C_GPU
-
-    return [C,timer]
-
-def tsqr_shared_mem_gpu_v1(A,num_threads):
-
-    A_blocked = shared_mem_block_part(A,num_threads)
-    loc={'A':'H','Q':'D','R':'H'}
-
-    result = list()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-        for t_id in range(num_threads):
-            result.append(executor.submit(_sm_block_gpu_qr,A_blocked[t_id],t_id,loc))
-
-    
-    Q1_GPU  = list()
-    R1_CPU  = list()
-    r1_time = list()
-
-    for m in result:
-        #print(m.result())
-        Q1_GPU.append (m.result()[0])
-        R1_CPU.append (m.result()[1])
-        r1_time.append(m.result()[2])
-    
-    R1=shared_mem_unblock(R1_CPU)
-    loc={'A':'H','Q':'D','R':'H'}
-    result =list()
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-        for t_id in range(num_threads):
-            result.append(executor.submit(_sm_block_gpu_qr,R1,t_id,loc))
-
-    Q2_GPU  = list()
-    R2_CPU  = list()
-    r2_time = list()
-    
-    for m in result:
-        Q2_GPU.append (m.result()[0])
-        R = m.result()[1]
-        r2_time.append(m.result()[2])
-
-    #print(Q2_GPU)
-    #print(R)
-    loc={'A':'D','B':'D','C':'H'}
-    [rows,cols] = R1.shape
-    result=list()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-        for t_id in range(num_threads):
-            # partition boundary. 
-            rb = ((t_id) * rows) // num_threads
-            re = ((t_id+1) * rows) // num_threads
-            result.append(executor.submit(_sm_block_gpu_matmult,Q1_GPU[t_id],Q2_GPU[t_id][rb:re,:],t_id,loc))
-            
-    r3_time=list()
-    Q2_CPU=list()
-    for m in result:
-        Q2_CPU.append(m.result()[0])
-        r3_time.append(m.result()[1])
-    
-    timer={"H2D":0,"D2H":0, "COMPUTE":0}
-    for k in timer.keys():
-        timer[k] += r1_time[0][k] + r2_time[0][k] + r3_time[0][k]
-
-    Q=shared_mem_unblock(Q2_CPU)
-    return [Q,R,timer]
-
-'''
-Perform shared mem. With multi-gpu partitioning. 
-'''
-def tsqr_shared_mem_gpu_v2(A,num_threads):
-    A_blocked = shared_mem_block_part(A,num_threads)
-    thread_id = list(range(0,num_threads))
-
-    loc_info  = list()
-    loc={'A':'H','Q':'D','R':'H'}
-    for tid in thread_id:
-        loc_info.append(loc)
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-        result=executor.map(_sm_block_gpu_qr,A_blocked,thread_id,loc_info)
-    
-    Q1_GPU  = list()
-    R1_CPU  = list()
-    r1_time = list()
-
-    for m in result:
-        Q1_GPU.append(m[0])
-        R1_CPU.append(m[1])
-        r1_time.append(m[2])
-
-    R1=shared_mem_unblock(R1_CPU)
-    #print(R1)
-    ROOT_DEV_ID  = 0
-    loc = {'A':'H','Q':'H','R':'H'}
-    [Q2_CPU,R2_CPU,tt_root] = _sm_block_gpu_qr(R1,ROOT_DEV_ID,loc)
-    Q2_blocked = shared_mem_block_part(Q2_CPU,num_threads)
-
-    loc_info  = list()
-    loc={'A':'D','B':'H','C':'H'}
-    for tid in thread_id:
-        loc_info.append(loc)
-    
-    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-        result=executor.map(_sm_block_gpu_matmult,Q1_GPU,Q2_blocked,thread_id,loc_info)
-    
-    #print(list(result))
-    r2_time=list()
-    Q2_CPU=list()
-    for m in result:
-        Q2_CPU.append(m[0])
-        r2_time.append(m[1])
-    # timer={"H2D":0,"D2H":0, "COMPUTE":0}
-
-    # for (k,_) in timer.items():
-    #     timer[k] += r1_time[k] + tt_root[k] + r2_time[p]
-    
-    Q=shared_mem_unblock(Q2_CPU)
-    R=R2_CPU
-
-    timer={"H2D":0,"D2H":0, "COMPUTE":0}
-    for k in timer.keys():
-        timer[k] += r1_time[0][k] + r2_time[0][k] + tt_root[k]
-
-    return [Q,R,timer]
 
 def tsqr_driver(comm):
 
     rank = comm.Get_rank()
     npes = comm.Get_size()
+
+    t_header = False
 
     if MODE == "MPI":
         for iter in range(0,WARMUP + ITERS):
@@ -555,17 +570,38 @@ def tsqr_driver(comm):
             #     print(A)
             #Ar = scatter_mat(A,comm)
             #print("rank %d : \n mat %s" %(rank,Ar))
-
-            start = time()
-            [Qr,Rr] = tsqr(Ar,comm)
-            end =time()
+            t_overall = profile_t("total")
+            t_overall.start()
+            [Qr,Rr,ts] = tsqr(Ar,comm)
+            t_overall.stop()
             
             if ((iter >= WARMUP)):
-                t_dur = end-start
+                if(not t_header):
+                    header="iter\ttotal_min\ttotal_max"
+                    for t in ts:
+                        header+="\t"+t.name+"_min"
+                        header+="\t"+t.name+"_max"
+                    
+                    if(not rank):
+                        print(header)
+                    t_header=True
+                
+                t_dur = t_overall.seconds
                 t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
                 t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
                 if(not rank):
-                    print(f'(t_min,t_max):\t\"({t_max},{t_min})\"\n', end='')
+                    t_= f"{iter}\t{t_min:.12f}\t{t_max:.12f}"
+                    
+                for t in ts:
+                    t_dur = t.seconds
+                    t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
+                    t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
+                    if(not rank):
+                        t_= t_ + f"\t{t_min:.12f}\t{t_max:.12f}"
+
+                
+                if(not rank):
+                    print(t_)
             
             #print("rank %d \n Q%s \n R %s" %(rank,Qr,Rr))
             #Qg = gather_mat(Q,comm)
@@ -587,17 +623,38 @@ def tsqr_driver(comm):
             # gen. partitioned matrix. 
             Ar = partitioned_rand_mat(NROWS,NCOLS,comm)
 
-            start = time()
-            [Qr,Rr,_] = tsqr_mpi_gpu_v2(Ar,comm)
-            end =time()
+            t_overall = profile_t("total")
+            t_overall.start()
+            [Qr,Rr,ts] = tsqr_mpi_gpu_v2(Ar,comm)
+            t_overall.stop()
             
             if ((iter >= WARMUP)):
-                t_dur = end-start
+                if(not t_header):
+                    header="iter\ttotal_min\ttotal_max"
+                    for t in ts:
+                        header+="\t"+t.name+"_min"
+                        header+="\t"+t.name+"_max"
+                    
+                    if(not rank):
+                        print(header)
+                    t_header=True
+                
+                t_dur = t_overall.seconds
                 t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
                 t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
                 if(not rank):
-                    print(f'(t_min,t_max):\t\"({t_max},{t_min})\"\n', end='')
-                    print("internal_timers %s"%_)
+                    t_= f"{iter}\t{t_min:.12f}\t{t_max:.12f}"
+                    
+                for t in ts:
+                    t_dur = t.seconds
+                    t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
+                    t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
+                    if(not rank):
+                        t_= t_ + f"\t{t_min:.12f}\t{t_max:.12f}"
+
+                
+                if(not rank):
+                    print(t_)
             
             if CHECK_RESULT:
                 is_valid = check_result(Ar,Qr,Rr,comm)
@@ -612,17 +669,38 @@ def tsqr_driver(comm):
             # gen. partitioned matrix. 
             Ar = partitioned_rand_mat(NROWS,NCOLS,comm)
 
-            start = time()
-            [Qr,Rr,_]=tsqr_shared_mem_gpu_v1(Ar,NTHREADS)
-            end =time()
+            t_overall = profile_t("total")
+            t_overall.start()
+            [Qr,Rr,ts]=tsqr_shared_mem_gpu_v1(Ar,NTHREADS)
+            t_overall.stop()
             
             if ((iter >= WARMUP)):
-                t_dur = end-start
+                if(not t_header):
+                    header="iter\ttotal_min\ttotal_max"
+                    for t in ts:
+                        header+="\t"+t.name+"_min"
+                        header+="\t"+t.name+"_max"
+                    
+                    if(not rank):
+                        print(header)
+                    t_header=True
+                
+                t_dur = t_overall.seconds
                 t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
                 t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
                 if(not rank):
-                    print(f'(t_min,t_max):\t\"({t_max},{t_min})\"\n', end='')
-                    print("internal_timers %s"%_)
+                    t_= f"{iter}\t{t_min:.12f}\t{t_max:.12f}"
+                    
+                for t in ts:
+                    t_dur = t.seconds
+                    t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
+                    t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
+                    if(not rank):
+                        t_= t_ + f"\t{t_min:.12f}\t{t_max:.12f}"
+
+                
+                if(not rank):
+                    print(t_)
 
             if CHECK_RESULT:
                 is_valid = shared_mem_check_result(Ar,Qr,Rr)
@@ -666,7 +744,7 @@ if __name__ == "__main__":
 
     if(not rank):
         print('%**********************************************************************************************%\n')
-        print('Config: rows=', NROWS, ' cols=', NCOLS, ' iterations=', ITERS, ' warmup=', WARMUP, ' check_result=', CHECK_RESULT, sep='', end='\n\n')
+        print('Config: rows=', NROWS, ' cols=', NCOLS, ' iterations=', ITERS, ' warmup=', WARMUP, ' check_result=', CHECK_RESULT,' MODE=', MODE,' THREADS=', NTHREADS, sep='', end='\n\n')
 
     comm.barrier()
     tsqr_driver(comm)
