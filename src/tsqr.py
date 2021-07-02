@@ -52,6 +52,12 @@ class profile_t:
         self.seconds +=self._pri_time
         self.snap  += self._pri_time
         self.iter+=1
+    
+    def reset(self):
+        self.seconds=0
+        self.snap=0
+        self._pri_time =0
+        self.iter =0
 
     
 
@@ -299,6 +305,7 @@ def block_gpu_qr(Ar,dev_id,loc={'A':'H','Q':'H','R':'H'}):
     
     t_kernel_gpu.start()
     [Q1, R1] = cp.linalg.qr(A_GPU,mode='reduced')
+    cp.cuda.get_current_stream().synchronize()
     t_kernel_gpu.stop()
     
 
@@ -345,6 +352,7 @@ def block_gpu_matmult(Ar,Br, dev_id,loc={'A':'H','B':'H','C':'H'}):
     
     t_kernel_gpu.start()
     C_GPU = cp.matmul(A_GPU,B_GPU)
+    cp.cuda.get_current_stream().synchronize()
     t_kernel_gpu.stop()
 
     if(loc['C']=='H'):
@@ -444,6 +452,74 @@ def tsqr_shared_mem_gpu_v1(A,num_threads):
 
     Q=shared_mem_unblock(Q2_CPU)
     _perf_stat = [t_h2d,t_kernel_gpu,t_d2h]
+    return [Q,R,_perf_stat]
+
+
+def tsqr_shared_mem_gpu_v2(A,num_threads):
+
+    A_blocked = shared_mem_block_part(A,num_threads)
+    loc={'A':'H','Q':'D','R':'H'}
+
+    t_h2d         = [profile_t("H2D")]*num_threads
+    t_d2h         = [profile_t("D2H")]*num_threads
+    t_kernel_gpu  = [profile_t("kernel_gpu")]*num_threads
+    t_t1_total    = [profile_t("t1_total")]*1
+    t_t2_total    = [profile_t("t2_total")]*1
+    t_t3_total    = [profile_t("t3_total")]*1
+    
+
+    result = list()
+    t_t1_total[0].start()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+        for t_id in range(num_threads):
+            result.append(executor.submit(block_gpu_qr,A_blocked[t_id],t_id,loc))
+
+    
+    Q1_GPU  = list()
+    R1_CPU  = list()
+    r1_time = list()
+
+    for m in result:
+        #print(m.result())
+        Q1_GPU.append (m.result()[0])
+        R1_CPU.append (m.result()[1])
+        r1_time.append(m.result()[2])
+    t_t1_total[0].stop()
+    
+    R1=shared_mem_unblock(R1_CPU)
+    loc={'A':'H','Q':'D','R':'H'}
+    result =list()
+
+    t_t2_total[0].start()
+    [Q2,R] = np.linalg.qr(R1,mode='reduced')
+    t_t2_total[0].stop()
+
+    #print(Q2_GPU)
+    #print(R)
+    loc={'A':'D','B':'H','C':'H'}
+    [rows,cols] = R1.shape
+    result=list()
+    t_t3_total[0].start()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+        for t_id in range(num_threads):
+            # partition boundary. 
+            [rb,re]=row_partition_bounds(rows,t_id,num_threads)
+            result.append(executor.submit(block_gpu_matmult,Q1_GPU[t_id],Q2[rb:re,:],t_id,loc))
+            
+    r3_time=list()
+    Q2_CPU=list()
+    for m in result:
+        Q2_CPU.append(m.result()[0])
+        r3_time.append(m.result()[1])
+
+    for i in range(num_threads):
+        t_h2d[i] = r1_time[i][0] + r3_time[i][0]
+        t_kernel_gpu[i] = r1_time[i][1] + r3_time[i][1]
+        t_d2h[i] = r1_time[i][2] + r3_time[i][2]
+
+    Q=shared_mem_unblock(Q2_CPU)
+    t_t3_total[0].stop()
+    _perf_stat = [t_t1_total,t_t2_total,t_t3_total,t_h2d,t_kernel_gpu,t_d2h]
     return [Q,R,_perf_stat]
 
 
@@ -683,13 +759,13 @@ def tsqr_driver(comm):
 
             t_overall = profile_t("total")
             t_overall.start()
-            [Qr,Rr,ts]=tsqr_shared_mem_gpu_v1(Ar,NTHREADS)
+            [Qr,Rr,ts]=tsqr_shared_mem_gpu_v2(Ar,NTHREADS)
             t_overall.stop()
             
             if ((iter >= WARMUP)):
                 if(not t_header):
-                    header="iter\ttotal_min\ttotal_max"
-                    for t in ts:
+                    header="iter\ttotal\tt1_total\tt2_total\tt3_total"
+                    for t in ts[3:]:
                         header+="\t"+t[0].name+"_min"
                         header+="\t"+t[0].name+"_max"
                     print(header)
@@ -698,9 +774,9 @@ def tsqr_driver(comm):
                 t_dur = t_overall.seconds
                 t_min = t_dur
                 t_max = t_dur
-                t_= f"{iter}\t{t_min:.12f}\t{t_max:.12f}"
+                t_= f"{iter}\t{t_dur:.12f}\t{ts[0][0].seconds:.12f}\t{ts[1][0].seconds:.12f}\t{ts[2][0].seconds:.12f}"
                     
-                for t in ts:
+                for t in ts[3:]:
                     t_min = min(t,key=lambda a: a.seconds).seconds
                     t_max = max(t,key=lambda a: a.seconds).seconds
                     t_= t_ + f"\t{t_min:.12f}\t{t_max:.12f}"
@@ -726,9 +802,9 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--iterations", help="Number of iterations to run experiment. If > 1, first is ignored as warmup.", type=int, default=1)
     parser.add_argument("-w", "--warmup", help="Number of warmup runs to perform before iterations.", 
     type=int, default=0)
-    parser.add_argument("-M", "--mode", help="execution mode: MPI, MPI+GPU",type=str,default="MPI")
+    parser.add_argument("-p", "--placement", help="execution mode: MPI, MPI+GPU",type=str,default="MPI")
     parser.add_argument("-K", "--check_result", help="Checks final result on CPU", action="store_true")
-    parser.add_argument("-T", "--threads", help="number of threads to use (MPI + Threads)",default=1,type=int)
+    parser.add_argument("-t", "--threads", help="number of threads to use (MPI + Threads)",default=1,type=int)
     args = parser.parse_args()
 
     
@@ -736,11 +812,11 @@ if __name__ == "__main__":
     NCOLS=args.cols
     ITERS = args.iterations
     WARMUP = args.warmup
-    MODE = args.mode
+    MODE = args.placement
     CHECK_RESULT = args.check_result
     NTHREADS = args.threads
 
-    os.environ["OMP_NUM_THREADS"] = str(NTHREADS)
+    #os.environ["OMP_NUM_THREADS"] = str(NTHREADS)
     
 
     comm = MPI.COMM_WORLD
