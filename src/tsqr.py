@@ -648,6 +648,7 @@ def tsqr_driver(comm):
 
     if MODE == "MPI":
         for iter in range(0,WARMUP + ITERS):
+            np.random.seed(iter)
             # generate a partitioned random matrix. 
             Ar = partitioned_rand_mat(NROWS,NCOLS,comm)
             
@@ -706,7 +707,7 @@ def tsqr_driver(comm):
     elif MODE == "MPI+CUDA":
         
         for iter in range(0,WARMUP+ITERS):
-            
+            np.random.seed(iter)
             # gen. partitioned matrix. 
             Ar = partitioned_rand_mat(NROWS,NCOLS,comm)
 
@@ -753,7 +754,7 @@ def tsqr_driver(comm):
 
     elif MODE == "SM+CUDA":
         for iter in range(0,WARMUP+ITERS):
-            
+            np.random.seed(iter)
             # gen. partitioned matrix. 
             Ar = partitioned_rand_mat(NROWS,NCOLS,comm)
 

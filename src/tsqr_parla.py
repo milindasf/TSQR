@@ -205,7 +205,7 @@ async def tsqr_blocked(A, block_size):
     t3_total.stop()
     return Q, R
 
-# Force all the tasks to GPU.     
+# !!! Don't use this. Force all the tasks to GPU. (Not Used)
 async def tsqr_blocked_puregpu(A, block_size):
     Q1 = [None] * NGPUS
     R1 = PartitionedTensor([None] * NGPUS) # CAVEAT: PartitionedTensor with None holes can be fragile! Be cautious!
