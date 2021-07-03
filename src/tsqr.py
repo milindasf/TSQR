@@ -547,9 +547,14 @@ def tsqr_mpi_gpu_v1(Ar, comm):
     t_d2h         = profile_t("D2H")
     t_mpi_comm    = profile_t("mpi_comm")
     t_kernel_gpu  = profile_t("kernel_gpu")
+    t_t1          = profile_t("qr1")
+    t_t2          = profile_t("qr2")
+    t_t3          = profile_t("mm")
     
     # perform blocked QR, 
+    t_t1.start()
     [Q1,R1,ts]=block_gpu_qr(Ar,dev_id,loc={'A':'H','Q':'D','R':'H'})
+    t_t1.stop()
 
     t_h2d += ts[0]
     t_kernel_gpu +=ts[1]
@@ -562,7 +567,10 @@ def tsqr_mpi_gpu_v1(Ar, comm):
     R1g = comm.bcast(R1g)
     t_mpi_comm.stop()
     
+    t_t2.start()
     [Q2,R,ts]=block_gpu_qr(R1g,dev_id,loc={'A':'H','Q':'D','R':'H'})
+    t_t2.stop()
+
     t_h2d += ts[0]
     t_kernel_gpu += ts[1]
     t_d2h += ts[2]
@@ -570,12 +578,15 @@ def tsqr_mpi_gpu_v1(Ar, comm):
     [rb,re] = row_partition_bounds(R1g.shape[0],rank,npes)
     Q2r = Q2[rb:re,:]
     
+    t_t3.start()
     [Q,ts]=block_gpu_matmult(Q1,Q2r,dev_id,loc={'A':'D','B':'D','C':'H'})
+    t_t3.stop()
+
     t_h2d += ts[0]
     t_kernel_gpu += ts[1]
     t_d2h += ts[2]
 
-    _pref_stat = [ t_mpi_comm, t_h2d, t_d2h, t_kernel_gpu ]
+    _pref_stat = [t_t1, t_t2, t_t3, t_mpi_comm, t_h2d, t_d2h, t_kernel_gpu]
     
     return [Q,R,_pref_stat]
 
@@ -603,9 +614,14 @@ def tsqr_mpi_gpu_v2(Ar, comm):
     t_d2h         = profile_t("D2H")
     t_mpi_comm    = profile_t("mpi_comm")
     t_kernel_gpu  = profile_t("kernel_gpu")
+    t_t1          = profile_t("qr1")
+    t_t2          = profile_t("qr2")
+    t_t3          = profile_t("mm")
     
     # perform blocked QR, 
+    t_t1.start()
     [Q1,R1,ts]=block_gpu_qr(Ar,dev_id,loc={'A':'H','Q':'D','R':'H'})
+    t_t1.stop()
     
     t_h2d += ts[0]
     t_kernel_gpu +=ts[1]
@@ -617,24 +633,29 @@ def tsqr_mpi_gpu_v2(Ar, comm):
     R1g = gather_mat(R1,comm)
     t_mpi_comm.stop()
     
+    t_t2.start()
     if(not rank):
         [Q2,R,ts]=block_gpu_qr(R1g,dev_id,loc={'A':'H','Q':'H','R':'H'})
         t_h2d += ts[0]
         t_kernel_gpu += ts[1]
         t_d2h += ts[2]
+    t_t2.stop()
     
         
     t_mpi_comm.start()
     R = comm.bcast(R)
     Q2r = scatter_mat(Q2,comm)
     t_mpi_comm.stop()
-    
+
+    t_t3.start()
     [Q,ts]=block_gpu_matmult(Q1,Q2r,dev_id,loc={'A':'D','B':'H','C':'H'})
+    t_t3.stop()
+
     t_h2d += ts[0]
     t_kernel_gpu += ts[1]
     t_d2h += ts[2]
 
-    _pref_stat = [ t_mpi_comm, t_h2d, t_d2h, t_kernel_gpu ]
+    _pref_stat = [t_t1, t_t2, t_t3, t_mpi_comm, t_h2d, t_d2h, t_kernel_gpu ]
     
     return [Q,R,_pref_stat]
 
@@ -765,7 +786,7 @@ def tsqr_driver(comm):
             
             if ((iter >= WARMUP)):
                 if(not t_header):
-                    header="iter\ttotal\tt1_total\tt2_total\tt3_total"
+                    header="iter\ttotal\tqr1\tqr2\tmm"
                     for t in ts[3:]:
                         header+="\t"+t[0].name+"_min"
                         header+="\t"+t[0].name+"_max"

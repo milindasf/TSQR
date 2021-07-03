@@ -337,7 +337,7 @@ def main():
             t_overall.stop()
             if ((iter >= WARMUP)):
                     if(not t_header):
-                        header="iter\ttotal\tt1\tt2\tt3"
+                        header="iter\ttotal\tqr1\tqr2\tmm"
                         for t in ts:
                             header+="\t"+t[0].name+"_min"
                             header+="\t"+t[0].name+"_max"
@@ -390,6 +390,8 @@ if __name__ == "__main__":
     PLACEMENT_STRING = args.placement
     CHECK_RESULT = args.check_result
     CSV = args.csv
+    
+    BLOCK_SIZE = NROWS // NGPUS
     NTASKS=(NROWS + BLOCK_SIZE - 1) // BLOCK_SIZE
 
     # Set up PLACEMENT variable
