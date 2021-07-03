@@ -1,0 +1,90 @@
+/home1/03727/tg830270/Research/TSQR/src
+Sat Jul  3 12:54:25 CDT 2021
+%**********************************************************************************************%
+
+Config: rows=1000 cols=100 block_size=250 iterations=1 warmup=2 threads=4 ngpus=4 placement=gpu check_result=False csv=False
+iter	total	qr1	qr2	mm	h2d_min	h2d_max	d2h_min	d2h_max	qr_gpu_min	qr_gpu_max	qr_gpu_min	qr_gpu_max	mm_cpu_min	mm_cpu_max	mm_gpu_min	mm_gpu_max
+2	0.050321956631	0.040871306788	0.002792976797	0.004039942287	0.002275763545	0.002275763545	0.001489048824	0.001489048824	0.004912678152	0.004912678152	0.004912678152	0.004912678152	0.000000000000	0.000000000000	0.000973911490	0.000973911490
+%**********************************************************************************************%
+
+%**********************************************************************************************%
+
+Config: rows=10000 cols=100 block_size=2500 iterations=1 warmup=2 threads=4 ngpus=4 placement=gpu check_result=False csv=False
+iter	total	qr1	qr2	mm	h2d_min	h2d_max	d2h_min	d2h_max	qr_gpu_min	qr_gpu_max	qr_gpu_min	qr_gpu_max	mm_cpu_min	mm_cpu_max	mm_gpu_min	mm_gpu_max
+2	0.064732933883	0.041132500861	0.010893285740	0.009462926071	0.004618554842	0.004618554842	0.004167459905	0.004167459905	0.010664584115	0.010664584115	0.010664584115	0.010664584115	0.000000000000	0.000000000000	0.001816117670	0.001816117670
+%**********************************************************************************************%
+
+%**********************************************************************************************%
+
+Config: rows=100000 cols=100 block_size=25000 iterations=1 warmup=2 threads=4 ngpus=4 placement=gpu check_result=False csv=False
+iter	total	qr1	qr2	mm	h2d_min	h2d_max	d2h_min	d2h_max	qr_gpu_min	qr_gpu_max	qr_gpu_min	qr_gpu_max	mm_cpu_min	mm_cpu_max	mm_gpu_min	mm_gpu_max
+2	0.200922941789	0.103865345009	0.045548923779	0.046911379322	0.029464057181	0.029464057181	0.024366856553	0.024366856553	0.067576565314	0.067576565314	0.067576565314	0.067576565314	0.000000000000	0.000000000000	0.010153784882	0.010153784882
+%**********************************************************************************************%
+
+%**********************************************************************************************%
+
+Config: rows=1000000 cols=100 block_size=250000 iterations=1 warmup=2 threads=4 ngpus=4 placement=gpu check_result=False csv=False
+iter	total	qr1	qr2	mm	h2d_min	h2d_max	d2h_min	d2h_max	qr_gpu_min	qr_gpu_max	qr_gpu_min	qr_gpu_max	mm_cpu_min	mm_cpu_max	mm_gpu_min	mm_gpu_max
+2	1.481211102568	0.500299335923	0.274317251984	0.697009921074	0.299904437736	0.299904437736	0.451723327395	0.451723327395	0.310651700012	0.310651700012	0.310651700012	0.310651700012	0.000000000000	0.000000000000	0.079730826896	0.079730826896
+%**********************************************************************************************%
+
+%**********************************************************************************************%
+
+Config: rows=1000 cols=100 iterations=1 warmup=2 check_result=False MODE=SM+CUDA THREADS=4
+
+iter	total	qr1	qr2	mm	H2D_min	H2D_max	kernel_gpu_min	kernel_gpu_max	D2H_min	D2H_max
+2	0.019918406848	0.013554124162	0.002034564037	0.004124910105	0.000402871985	0.001081427559	0.010757520329	0.012352341786	0.000209229998	0.000249363948
+%**********************************************************************************************%
+
+Config: rows=10000 cols=100 iterations=1 warmup=2 check_result=False MODE=SM+CUDA THREADS=4
+
+iter	total	qr1	qr2	mm	H2D_min	H2D_max	kernel_gpu_min	kernel_gpu_max	D2H_min	D2H_max
+2	0.026159272064	0.016240504570	0.002542514820	0.006915799342	0.001009536441	0.001265584026	0.012562070973	0.015426747967	0.000530157238	0.000609481242
+%**********************************************************************************************%
+
+Config: rows=100000 cols=100 iterations=1 warmup=2 check_result=False MODE=SM+CUDA THREADS=4
+
+iter	total	qr1	qr2	mm	H2D_min	H2D_max	kernel_gpu_min	kernel_gpu_max	D2H_min	D2H_max
+2	0.095248131081	0.043507135939	0.002265610732	0.048351244070	0.007436192594	0.009209844749	0.036396401934	0.036637089215	0.003238372970	0.009995365050
+%**********************************************************************************************%
+
+Config: rows=1000000 cols=100 iterations=1 warmup=2 check_result=False MODE=SM+CUDA THREADS=4
+
+iter	total	qr1	qr2	mm	H2D_min	H2D_max	kernel_gpu_min	kernel_gpu_max	D2H_min	D2H_max
+2	0.628543733153	0.208773173857	0.002405114938	0.412743513938	0.049474840052	0.058161612600	0.169265045319	0.171429164242	0.064956825227	0.080496509559
+TACC:  Starting up job 3220636 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+Config: rows=1000 cols=100 iterations=1 warmup=2 check_result=False MODE=MPI+CUDA THREADS=1
+
+iter	total_min	total_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	mpi_comm_min	mpi_comm_max	H2D_min	H2D_max	D2H_min	D2H_max	kernel_gpu_min	kernel_gpu_max
+2	0.004967431072	0.005059847143	0.002049128059	0.002070489805	0.002112663817	0.002134406939	0.000292058103	0.000302569941	0.000450339168	0.000553320162	0.000196668785	0.000242426060	0.000260287896	0.000272497069	0.003940853290	0.003994011786
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3220636 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+Config: rows=10000 cols=100 iterations=1 warmup=2 check_result=False MODE=MPI+CUDA THREADS=1
+
+iter	total_min	total_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	mpi_comm_min	mpi_comm_max	H2D_min	H2D_max	D2H_min	D2H_max	kernel_gpu_min	kernel_gpu_max
+2	0.007887720130	0.008156292140	0.004522995092	0.004576698877	0.002122876700	0.002147257794	0.000673564151	0.000709266402	0.000489804894	0.000745594036	0.000514794607	0.000554576982	0.000507160090	0.000535097439	0.006274256855	0.006306671072
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3220636 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+Config: rows=100000 cols=100 iterations=1 warmup=2 check_result=False MODE=MPI+CUDA THREADS=1
+
+iter	total_min	total_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	mpi_comm_min	mpi_comm_max	H2D_min	H2D_max	D2H_min	D2H_max	kernel_gpu_min	kernel_gpu_max
+2	0.039015860297	0.044267798308	0.026623527985	0.026947867125	0.002159500960	0.002184966113	0.009485179093	0.010213868693	0.000660893973	0.005556955002	0.004139715806	0.004571847152	0.007171755191	0.007934852038	0.026770228520	0.026879821904
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3220636 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+Config: rows=1000000 cols=100 iterations=1 warmup=2 check_result=False MODE=MPI+CUDA THREADS=1
+
+iter	total_min	total_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	mpi_comm_min	mpi_comm_max	H2D_min	H2D_max	D2H_min	D2H_max	kernel_gpu_min	kernel_gpu_max
+2	0.279900768306	0.285834352020	0.187034596689	0.192208652850	0.001903563738	0.001929794904	0.082766563166	0.085197881795	0.000634596683	0.012224330101	0.043553956319	0.048213246278	0.064585135318	0.066989108920	0.163398626260	0.164509672206
+TACC:  Shutdown complete. Exiting. 
