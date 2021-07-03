@@ -1,0 +1,82 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{color}
+\usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{pgfplots}
+
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{definition}{Definition}[section]
+\newcommand{\R}{\mathbb{R}}
+
+\title{Parla Performance Study}
+\author{Milinda Fernando and Geroge Biros}
+
+\begin{document}
+\maketitle
+
+\section{Benchmark} 
+We use the tall skinny QR (TSQR) decomposition algorithm proposed in \cite{}. For a given matrix $A\in \R^{m\times n}$ we assume $m>>n$. The parallel TSQR algorithm can be summarized as follows. 
+
+\begin{algorithm}
+    \caption{TSQR decomposition}
+    \begin{algorithmic} 
+    \REQUIRE $A \in \R^{m\times n}, m>>n$, $p$ parallel tasks
+    \ENSURE $A=QR$ for $Q\in \R^{m\times n }$, $Q^TQ=I$ and $R$ is upper triangular.
+    \STATE $Ar \leftarrow Partition(A,p)$
+    \STATE $Q1r,R1r \leftarrow QR(Ar)$
+    \STATE $R1 \leftarrow Gather(R1r,p)$
+    \STATE $Q2,R \leftarrow Qr(R1)$
+    \STATE $Q2r \leftarrow Partition(Q2r)$ \COMMENT{Same parition bounds as $A$}
+    \STATE $Q\leftarrow Q1r \times Q2r$
+    \RETURN $Q,R$
+    \end{algorithmic}
+\end{algorithm}
+
+\section{Implementation}
+The following 3 implementations are considered in this performance evaluation. 
+\begin{itemize}
+    \item Parla QR + Cupy
+    \item Python threading + Cupy
+    \item Python MPI + Cupy
+\end{itemize}
+
+\section{Experimental setup}
+\begin{itemize}
+    \item The experiments are conducted in Frontera, GPU cluster, where single node consists of Two Intel Xeon E5-2620 v4 (“Broadwell”) with four NVIDIA Quadro RTX 5000 GPUs.
+\end{itemize}
+
+\section{Results}
+\textbullet~ \textbf{Note}: In this experiment, Parla block size was increased with the number of rows in the matrix, such that we get four tasks for 4 GPUs. 
+
+\begin{figure}[!tbhp]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+                ybar, 
+                symbolic x coords={1K,10K,100K,1000K},
+                xtick=data,
+                width=13cm,
+                height=5cm,
+                grid=major,
+                xlabel={number of rows}, ylabel={runtime (s)},
+                legend pos= north west,
+            ]
+            \addplot[bar shift=-0.4cm,fill=green!30] table[x={Rows},y={total_max}]{dat/frontera_mpi_gpu.dat};
+            \addplot[bar shift=-0.00cm,fill=blue!30] table[x={Rows},y={total}]{dat/frontera_sm_gpu.dat};
+            \addplot[bar shift=0.4cm,fill=red!30] table[x={Rows},y={total}]{dat/frontera_parla_gpu.dat};
+            \legend{MPI + Cupy, Threads + Cupy, Parla + Cupy}
+        \end{axis}
+    \end{tikzpicture}
+    \caption{Single node performance for TSQR algorithm implemented using Cupy where the parallelism achieved by, Python MPI, Python threading and Parla framework in Frontera GPU cluster. For this experiment matrix column size was fixed at 100 columns.}
+\end{figure}
+
+
+    
+
+    
+\end{document}
