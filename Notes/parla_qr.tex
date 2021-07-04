@@ -47,7 +47,7 @@ The following 3 implementations are considered in this performance evaluation.
 
 \section{Experimental setup}
 \begin{itemize}
-    \item The experiments are conducted in Frontera, GPU cluster, where single node consists of Two Intel Xeon E5-2620 v4 (“Broadwell”) with four NVIDIA Quadro RTX 5000 GPUs.
+    \item The experiments are conducted in Frontera, GPU cluster, where single node consists of Two Intel Xeon E5-2620 v4 (“Broadwell”) with four NVIDIA Quadro RTX5000 GPUs.
 \end{itemize}
 
 \section{Results}
@@ -60,22 +60,29 @@ The following 3 implementations are considered in this performance evaluation.
                 ybar, 
                 symbolic x coords={1K,10K,100K,1000K},
                 xtick=data,
-                width=13cm,
+                width=15cm,
                 height=5cm,
                 grid=major,
                 xlabel={number of rows}, ylabel={runtime (s)},
-                legend pos= north west,
+                legend pos= north west,legend columns=2,
             ]
-            \addplot[bar shift=-0.4cm,fill=green!30] table[x={Rows},y={total_max}]{dat/frontera_mpi_gpu.dat};
-            \addplot[bar shift=-0.00cm,fill=blue!30] table[x={Rows},y={total}]{dat/frontera_sm_gpu.dat};
-            \addplot[bar shift=0.4cm,fill=red!30] table[x={Rows},y={total}]{dat/frontera_parla_gpu.dat};
-            \legend{MPI + Cupy, Threads + Cupy, Parla + Cupy}
+            \addplot[bar shift=-1.2cm,fill=green!30] table[x={Rows},y={total_max}]{dat/frontera_mpi_gpu_v1.dat};
+            \addplot[bar shift=-0.8cm,fill=green!70] table[x={Rows},y={total_max}]{dat/frontera_mpi_gpu_v3.dat};
+            \addplot[bar shift=-0.4cm,fill=blue!30] table[x={Rows},y={total}]{dat/frontera_sm_gpu.dat};
+            \addplot[bar shift=0.0cm,fill=orange!30] table[x={Rows},y={total}]{dat/frontera_parla_gpu_t4.dat};
+            \addplot[bar shift=0.4cm,fill=red!30] table[x={Rows},y={total}]{dat/frontera_parla_gpu_t8.dat};
+            \addplot[bar shift=0.8cm,fill=yellow!30] table[x={Rows},y={total}]{dat/frontera_parla_gpu_t16.dat};
+            \legend{MPI + Cupy (qr2 in GPU),MPI + Cupy (qr2 in CPU), Threads + Cupy, Parla + Cupy (4 tasks), Parla + Cupy (8 tasks), Parla + Cupy (16 tasks) }
         \end{axis}
     \end{tikzpicture}
     \caption{Single node performance for TSQR algorithm implemented using Cupy where the parallelism achieved by, Python MPI, Python threading and Parla framework in Frontera GPU cluster. For this experiment matrix column size was fixed at 100 columns.}
 \end{figure}
 
-
+\subsection{Performance analysis}
+\begin{itemize}
+    \item In Parla, for a given problem size, overall performance is dependent on the number of task created. I think the optimal performance depends on the balance between the task creation overhead and ability to overlap execution in tasks (i.e., overlap between data movement and computations)
+    \item Parla runtime grows with the number of tasks in task space. The above is expected, since the overhead of the task creation and scheduling increases with the number of tasks. 
+\end{itemize}
     
 
     
