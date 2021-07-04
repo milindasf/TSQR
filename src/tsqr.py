@@ -660,6 +660,74 @@ def tsqr_mpi_gpu_v2(Ar, comm):
     return [Q,R,_pref_stat]
 
 
+'''
+MPI version 3, 
+the second QR is done in the CPU. 
+'''
+def tsqr_mpi_gpu_v3(Ar, comm):
+
+    rank = comm.Get_rank()
+    npes = comm.Get_size()
+
+    Q=None
+    Q2=None
+    R=None
+
+    num_devices=cp.cuda.runtime.getDeviceCount()
+    dev_id = rank % num_devices
+    cp.cuda.Device(dev_id).use()
+    #print(num_devices)
+    #print("rank: %d using %d" %(rank,cp.cuda.Device(dev_id).id))
+
+    t_h2d         = profile_t("H2D")
+    t_d2h         = profile_t("D2H")
+    t_mpi_comm    = profile_t("mpi_comm")
+    t_kernel_gpu  = profile_t("kernel_gpu")
+    t_t1          = profile_t("qr1")
+    t_t2          = profile_t("qr2")
+    t_t3          = profile_t("mm")
+    
+    # perform blocked QR, 
+    t_t1.start()
+    [Q1,R1,ts]=block_gpu_qr(Ar,dev_id,loc={'A':'H','Q':'D','R':'H'})
+    t_t1.stop()
+
+    t_h2d += ts[0]
+    t_kernel_gpu +=ts[1]
+    t_d2h += ts[2]
+
+    
+    # gather R1 to rank 0 (root) processor
+    t_mpi_comm.start()
+    R1g = gather_mat(R1,comm)
+    R1g = comm.bcast(R1g)
+    t_mpi_comm.stop()
+    
+    t_t2.start()
+    #[Q2,R,ts]=block_gpu_qr(R1g,dev_id,loc={'A':'H','Q':'D','R':'H'})
+    [Q2,R] = np.linalg.qr(R1g,mode='reduced')
+    t_t2.stop()
+
+    #t_h2d += ts[0]
+    #t_kernel_gpu += ts[1]
+    #t_d2h += ts[2]
+
+    [rb,re] = row_partition_bounds(R1g.shape[0],rank,npes)
+    Q2r = Q2[rb:re,:]
+    
+    t_t3.start()
+    [Q,ts]=block_gpu_matmult(Q1,Q2r,dev_id,loc={'A':'D','B':'H','C':'H'})
+    t_t3.stop()
+
+    t_h2d += ts[0]
+    t_kernel_gpu += ts[1]
+    t_d2h += ts[2]
+
+    _pref_stat = [t_t1, t_t2, t_t3, t_mpi_comm, t_h2d, t_d2h, t_kernel_gpu]
+    
+    return [Q,R,_pref_stat]
+
+
 def tsqr_driver(comm):
 
     rank = comm.Get_rank()

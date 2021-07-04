@@ -391,7 +391,7 @@ if __name__ == "__main__":
     CHECK_RESULT = args.check_result
     CSV = args.csv
     
-    BLOCK_SIZE = NROWS // NGPUS
+    BLOCK_SIZE = NROWS // (1*NGPUS)
     NTASKS=(NROWS + BLOCK_SIZE - 1) // BLOCK_SIZE
 
     # Set up PLACEMENT variable
