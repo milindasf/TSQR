@@ -14,7 +14,7 @@
 \newcommand{\R}{\mathbb{R}}
 
 \title{Parla Performance Study}
-\author{Milinda Fernando and Geroge Biros}
+%\author{Milinda Fernando and Geroge Biros}
 
 \begin{document}
 \maketitle
@@ -60,18 +60,21 @@ The following 3 implementations are considered in this performance evaluation.
                 ybar, 
                 symbolic x coords={1K,10K,100K,1000K},
                 xtick=data,
-                width=15cm,
+                width=12cm,
                 height=5cm,
                 grid=major,
-                xlabel={number of rows}, ylabel={runtime (s)},
-                legend pos= north west,legend columns=2,
+                xlabel={number of rows $\rightarrow$}, ylabel={runtime (s) $\rightarrow$},
+                %legend pos= north west,
+                legend columns=2,
+                legend style={at={(0.5,-0.3)},anchor=north},
+                bar width=0.2cm,
             ]
-            \addplot[bar shift=-1.2cm,fill=green!30] table[x={Rows},y={total_max}]{dat/frontera_mpi_gpu_v1.dat};
-            \addplot[bar shift=-0.8cm,fill=green!70] table[x={Rows},y={total_max}]{dat/frontera_mpi_gpu_v3.dat};
-            \addplot[bar shift=-0.4cm,fill=blue!30] table[x={Rows},y={total}]{dat/frontera_sm_gpu.dat};
+            \addplot[bar shift=-0.6cm,fill=green!30] table[x={Rows},y={total_max}]{dat/frontera_mpi_gpu_v1.dat};
+            \addplot[bar shift=-0.4cm,fill=green!70] table[x={Rows},y={total_max}]{dat/frontera_mpi_gpu_v3.dat};
+            \addplot[bar shift=-0.2cm,fill=blue!30] table[x={Rows},y={total}]{dat/frontera_sm_gpu.dat};
             \addplot[bar shift=0.0cm,fill=orange!30] table[x={Rows},y={total}]{dat/frontera_parla_gpu_t4.dat};
-            \addplot[bar shift=0.4cm,fill=red!30] table[x={Rows},y={total}]{dat/frontera_parla_gpu_t8.dat};
-            \addplot[bar shift=0.8cm,fill=yellow!30] table[x={Rows},y={total}]{dat/frontera_parla_gpu_t16.dat};
+            \addplot[bar shift=0.2cm,fill=red!30] table[x={Rows},y={total}]{dat/frontera_parla_gpu_t8.dat};
+            \addplot[bar shift=0.4cm,fill=yellow!30] table[x={Rows},y={total}]{dat/frontera_parla_gpu_t16.dat};
             \legend{MPI + Cupy (qr2 in GPU),MPI + Cupy (qr2 in CPU), Threads + Cupy, Parla + Cupy (4 tasks), Parla + Cupy (8 tasks), Parla + Cupy (16 tasks) }
         \end{axis}
     \end{tikzpicture}
@@ -81,9 +84,85 @@ The following 3 implementations are considered in this performance evaluation.
 \subsection{Performance analysis}
 \begin{itemize}
     \item In Parla, for a given problem size, overall performance is dependent on the number of task created. I think the optimal performance depends on the balance between the task creation overhead and ability to overlap execution in tasks (i.e., overlap between data movement and computations)
-    \item Parla runtime grows with the number of tasks in task space. The above is expected, since the overhead of the task creation and scheduling increases with the number of tasks. 
+    \item Parla runtime grows with the number of tasks in task space for smaller problem sizes. The above is expected, since the overhead of the task creation and scheduling increases with the number of tasks. 
 \end{itemize}
-    
+% \begin{figure}[!tbhp]
+%     \centering
+%     \begin{tikzpicture}
+%         \begin{axis}[
+%                 ybar, 
+%                 symbolic x coords={1K,10K,100K,1000K},
+%                 xtick=data,
+%                 width=15cm,
+%                 height=5cm,
+%                 grid=major,
+%                 xlabel={number of rows}, ylabel={runtime (s)},
+%                 legend pos= north west,legend columns=2,
+%             ]
+%             \addplot[bar shift=-0.4cm,fill=green!70] table[x={Rows},y={total_max}]{dat/frontera_mpi_gpu_v3.dat};
+%             \legend{MPI + Cupy (qr2 in GPU),MPI + Cupy (qr2 in CPU), Threads + Cupy, Parla + Cupy (4 tasks), Parla + Cupy (8 tasks), Parla + Cupy (16 tasks) }
+%         \end{axis}
+%     \end{tikzpicture}
+%     \caption{MPI + CUDA runtime breakdown}
+% \end{figure}
+\subsection{Single GPU performance analysis}
+This section presents performance analysis for single process using single GPU to perform the QR decomposition of varying matrix sizes. 
+\begin{figure}[!tbhp]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+                symbolic x coords={1K,10K,100K,1000K},
+                xtick=data,
+                width=12cm,
+                height=6cm,
+                grid=major,
+                xlabel={number of rows}, ylabel={GB/s},
+                %legend pos=outer north east,legend columns=1,
+                legend columns=3,
+                legend style={at={(0.5,-0.25)},anchor=north},
+            ]
+            \addplot[mark=*,red] table[x={NROWS},y={H2D_BW(GB/sec)}]{dat/rtx5000_qr_n10.dat};
+            \addplot[mark=square,blue] table[x={NROWS},y={H2D_BW(GB/sec)}]{dat/rtx5000_qr_n100.dat};
+            \addplot[mark=triangle,green] table[x={NROWS},y={H2D_BW(GB/sec)}]{dat/rtx5000_qr_n1000.dat};
+            \addplot[mark=*,red,dashed] table[x={NROWS},y={D2H_BW(GB/sec)}]{dat/rtx5000_qr_n10.dat};
+            \addplot[mark=square,blue,dashed] table[x={NROWS},y={D2H_BW(GB/sec)}]{dat/rtx5000_qr_n100.dat};
+            \addplot[mark=triangle,green,dashed] table[x={NROWS},y={D2H_BW(GB/sec)}]{dat/rtx5000_qr_n1000.dat};
+            
+            \legend{H2D (n=10),H2D (n=100), H2D (n=1000),D2H (n=10),D2H (n=100), D2H (n=1000)} 
+        \end{axis}
+    \end{tikzpicture}
+    \caption{Empirical data transfer bandwidth for cupy transfer of $2d$ arrays. For a matrix $A$ with $m$ rows and $n$ columns, host to device (H2D) transfer has the complexity of $\mathbb{O}(mn)$. The device to host (D2H) transfer copy two cupy arrays (computed $Q,R$ factors) to numpy arrays with complexity of $\mathbb{O}(mn + n^2)$.}
+\end{figure}
 
+\begin{figure}[!tbhp]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+                symbolic x coords={1K,10K,100K,1000K},
+                xtick=data,
+                width=12cm,
+                height=6cm,
+                grid=major,
+                xlabel={number of rows $\rightarrow$ }, ylabel={GFlops/s $\rightarrow$},
+                %legend pos=outer north east,legend columns=1,
+                legend columns=3,
+                legend style={at={(0.5,-0.25)},anchor=north},
+            ]
+            \addplot[mark=*,red] table[x={NROWS},y={QR_FLOPS(GFlops/sec)}]{dat/rtx5000_qr_n10.dat};
+            \addplot[mark=square,blue] table[x={NROWS},y={QR_FLOPS(GFlops/sec)}]{dat/rtx5000_qr_n100.dat};
+            \addplot[mark=triangle,green] table[x={NROWS},y={QR_FLOPS(GFlops/sec)}]{dat/rtx5000_qr_n1000.dat};
+            \legend{n=10,n=100,n=1000} 
+        \end{axis}
+    \end{tikzpicture}
+    \caption{Empirical GFlops/s computed based on $\mathbb{O}(mn^2 - \frac{2}{3}n^3)$ floating point operations for different matrix sizes, where $n$ denotes the number of columns.}
+\end{figure}
+
+\subsection{Performance model for shared memory multi-gpu TSQR}
+Let $B_{H2D}$, $B_{D2H}$ be the bandwidth for host to device and device to host data transfers respectively. Let $QR_{gpu}(m,n)$ and $QR_{cpu}(m,n)$ be the flops/s for the cupy QR and numpy QR decomposition for a given number of rows $m$ and columns $n$. Let $MM_{gpu}(m,n)$ be the flops/s for GPU execution of general matrix-matrix multiplication. Let p be the number of threads (1 per GPU) in the shared memory parallel multi-gpu execution. Then the overall time can be approximated by, 
+\begin{align}
+    T(m,n) &= \frac{mn}{B_{H2D}}  + \frac{\frac{mn^2}{p} -\frac{2}{3}n^3}{QR_{gpu}} + \frac{n^2}{B_{D2H}} \nonumber \\
+           & + \frac{pn^3 -\frac{2}{3}n^3}{QR_{cpu}} + \frac{n^2}{B_{H2D}} \nonumber \\ 
+           & + \frac{\frac{mn}{p}(n^2-n)}{MM_{gpu}} + \frac{mn}{H_{D2H}}
+\end{align}
     
 \end{document}
