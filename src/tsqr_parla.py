@@ -299,7 +299,7 @@ def main():
     @spawn()
     async def test_tsqr_blocked(placement=cpu):
         t_header=False
-        ts=[t_h2d,t_d2h,t_qr_gpu,t_qr_gpu,t_mm_cpu,t_mm_gpu]
+        ts=[t_h2d,t_d2h,t_qr_cpu,t_qr_gpu,t_mm_cpu,t_mm_gpu]
         for iter in range(WARMUP + ITERS):
             np.random.seed(iter)
             A = np.random.rand(NROWS, NCOLS)
@@ -349,9 +349,17 @@ def main():
                     t_max = t_dur
                     t_= f"{iter}\t{t_dur:.12f}\t{t1_total.seconds:.12f}\t{t2_total.seconds:.12f}\t{t3_total.seconds:.12f}"
 
-                    for t in ts:
-                        t_min = min(t,key=lambda a: a.seconds).seconds
-                        t_max = max(t,key=lambda a: a.seconds).seconds
+                    for tt in ts:
+                        t_min = tt[0].seconds
+                        t_max = tt[0].seconds
+                        for t in tt:
+                            if (t_min > t.seconds):
+                                t_min = t.seconds
+                            
+                            if (t_max < t.seconds):
+                                t_max = t.seconds
+                            # t_min = min(t,key=lambda a: a.seconds).seconds
+                            # t_max = max(t,key=lambda a: a.seconds).seconds
                         t_= t_ + f"\t{t_min:.12f}\t{t_max:.12f}"
                     print(t_)
             # Check the results

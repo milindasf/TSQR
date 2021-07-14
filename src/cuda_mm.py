@@ -1,10 +1,11 @@
 import numpy as np
+import cupy as cp
 from time import perf_counter as time
 import os
 import argparse
 
-class profile_t:
 
+class profile_t:
     def __init__(self,name):
         self.name = name
         self.seconds=0
@@ -38,6 +39,50 @@ class profile_t:
         self._pri_time =0
         self.iter =0
 
+
+def block_gpu_matmult(Ar,Br, dev_id,loc={'A':'H','B':'H','C':'H'}):
+    
+    t_h2d         = profile_t("H2D")
+    t_d2h         = profile_t("D2H")
+    t_kernel_gpu  = profile_t("kernel_gpu")
+
+    cp.cuda.Device(dev_id).use()
+
+    A_GPU=Ar
+    B_GPU=Br
+
+    if(loc['A']=='H'  or loc['B']=='H'):
+        t_h2d.start()
+        if(loc['A']=='H'):
+            A_GPU = cp.array(Ar)
+        else:
+            A_GPU=Ar
+
+        if(loc['B']=='H'):
+            B_GPU = cp.array(Br)
+        else:
+            B_GPU=Br
+
+        cp.cuda.stream.get_current_stream().synchronize()
+        t_h2d.stop()
+    
+    
+    t_kernel_gpu.start()
+    C_GPU = cp.matmul(A_GPU,B_GPU)
+    cp.cuda.get_current_stream().synchronize()
+    t_kernel_gpu.stop()
+
+    if(loc['C']=='H'):
+        t_d2h.start()
+        C = cp.asnumpy(C_GPU)
+        cp.cuda.stream.get_current_stream().synchronize()
+        t_d2h.stop()
+    else:
+        C=C_GPU
+    
+    _perf_stat= [t_h2d,t_kernel_gpu,t_d2h]
+    return [C,_perf_stat]
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-r", "--rows", help="Number of rows for input matrix; must be >> cols", type=int, default=5000)
@@ -69,33 +114,66 @@ if __name__ == "__main__":
     for iter in range(ITERS + WARMUP):
         np.random.seed(iter)
         A = np.random.rand(NROWS, NCOLS)
+        B = np.random.rand(NCOLS, NCOLS)
+
         t_overall = profile_t("total")
         t_overall.start()
-        [Q,R] = np.linalg.qr(A,mode='reduced')
+        [C,_ts] = block_gpu_matmult(A,B,0,loc={'A':'H','B':'H','C':'H'})
         t_overall.stop()
         
         if ((iter >= WARMUP)):
             if(not t_header):
                 header="iter\ttotal"
+                for t in _ts:
+                    header+="\t"+t.name+""
                 print(header)
                 t_header=True
                 
             t_dur = t_overall.seconds
+            t_min = t_dur
+            t_max = t_dur
             t_= f"{iter}\t{t_dur:.12f}"
-            print(t_)
-
-            t_list.append(t_overall)
                
-    CPU_FLOP   = (2*NROWS * (NCOLS**2) - (2/3) * (NCOLS**3))  
+            for t in _ts:
+                t_min = t.seconds
+                t_= t_ + f"\t{t_min:.12f}"
 
-    QR_FLOPS  = 0 
+            print(t_)
+            t_list_iter =list()
+            t_list_iter.append(t_overall)
+            for t in _ts:
+                t_list_iter.append(t)
+            t_list.append(t_list_iter)
+    
+    H2D_bytes = (NROWS*NCOLS + NCOLS**2) * 8
+    D2H_bytes = (NROWS*NCOLS) * 8
+    GPU_FLOP   = (NROWS * (NCOLS) * (2*NCOLS-1))  
+
+    H2D_BW    = 0
+    D2H_BW    = 0
+    MM_FLOPS  = 0 
 
     for i,t_iter in enumerate(t_list):
-        t_qr = t_iter
-        QR_FLOPS += CPU_FLOP  / (t_qr.seconds)
-        
-    QR_FLOPS /= len(t_list)
-    
-    QR_FLOPS /=(1000**3)
-    print("\nNROWS\tNCOLS\tQR_FLOPS(GFlops/sec)")
-    print(f"{NROWS}\t{NCOLS}\t{QR_FLOPS}")
+        t_total = t_iter[0]
+        t_h2d   = t_iter[1]
+        t_qr    = t_iter[2]
+        t_d2h   = t_iter[3]
+
+        assert(t_h2d.name == "H2D")
+        assert(t_qr.name  == "kernel_gpu")
+        assert(t_d2h.name == "D2H")
+
+        H2D_BW   += H2D_bytes / (t_h2d.seconds)
+        MM_FLOPS += GPU_FLOP  / (t_qr.seconds)
+        D2H_BW   += D2H_bytes / (t_d2h.seconds)
+
+    H2D_BW   /= len(t_list)
+    MM_FLOPS /= len(t_list)
+    D2H_BW   /= len(t_list)
+
+    H2D_BW   /=(1024**3)
+    D2H_BW   /=(1024**3)
+    MM_FLOPS /=(1000**3)
+
+    print("\nNROWS\tNCOLS\tH2D_BW(GB/sec)\tMM_FLOPS(GFlops/sec)\tD2H_BW(GB/sec)")
+    print(f"{NROWS}\t{NCOLS}\t{H2D_BW}\t{MM_FLOPS}\t{D2H_BW}")

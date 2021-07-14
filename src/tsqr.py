@@ -511,14 +511,14 @@ def tsqr_shared_mem_gpu_v2(A,num_threads):
     for m in result:
         Q2_CPU.append(m.result()[0])
         r3_time.append(m.result()[1])
-
+    t_t3_total[0].stop()
+    
     for i in range(num_threads):
         t_h2d[i] = r1_time[i][0] + r3_time[i][0]
         t_kernel_gpu[i] = r1_time[i][1] + r3_time[i][1]
         t_d2h[i] = r1_time[i][2] + r3_time[i][2]
 
     Q=shared_mem_unblock(Q2_CPU)
-    t_t3_total[0].stop()
     _perf_stat = [t_t1_total,t_t2_total,t_t3_total,t_h2d,t_kernel_gpu,t_d2h]
     return [Q,R,_perf_stat]
 

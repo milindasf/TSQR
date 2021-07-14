@@ -81,7 +81,6 @@ def block_gpu_qr(Ar,dev_id,loc={'A':'H','Q':'H','R':'H'}):
     _perf_stat= [t_h2d,t_kernel_gpu,t_d2h]
     return [Q1,R1,_perf_stat]
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-r", "--rows", help="Number of rows for input matrix; must be >> cols", type=int, default=5000)
@@ -144,7 +143,7 @@ if __name__ == "__main__":
     
     H2D_bytes = NROWS*NCOLS * 8
     D2H_bytes = (NROWS*NCOLS + NCOLS**2)* 8
-    GPU_FLOP   = (NROWS * (NCOLS**2) - (2/3) * (NCOLS**3))  
+    GPU_FLOP   = (2*NROWS * (NCOLS**2) - (2/3) * (NCOLS**3))  
 
     H2D_BW    = 0
     D2H_BW    = 0
@@ -175,7 +174,7 @@ if __name__ == "__main__":
     print("\nNROWS\tNCOLS\tH2D_BW(GB/sec)\tQR_FLOPS(GFlops/sec)\tD2H_BW(GB/sec)")
     print(f"{NROWS}\t{NCOLS}\t{H2D_BW}\t{QR_FLOPS}\t{D2H_BW}")
 
-
+    
 
 
 
