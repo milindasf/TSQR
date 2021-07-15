@@ -1,0 +1,324 @@
+\documentclass{beamer}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{color}
+\usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{pgfplots}
+\usepackage{hyperref}
+\usetikzlibrary{patterns}
+
+\makeatletter
+\newcommand\resetstackedplots{
+\makeatletter
+\pgfplots@stacked@isfirstplottrue
+\makeatother
+\addplot [forget plot,draw=none] coordinates{(1K,0) (10K,0) (100K,0) (1000K,0)};
+}
+\makeatother
+
+
+% \newtheorem{theorem}{Theorem}[section]
+% \newtheorem{definition}{Definition}[section]
+\newcommand{\R}{\mathbb{R}}
+
+%Information to be included in the title page:
+\title{Parla performance analysis for TSQR factorization}
+\author{Milinda Fernando}
+\institute{Parla Group Meeting}
+\date{July $16^{th}$, 2021}
+
+\begin{document}
+
+\frame{\titlepage}
+
+\begin{frame}[fragile]
+\frametitle{Tall Skinny QR (TSQR)}
+For $A\in \R^{m\times n}$, $m>>n$ find orthogonal $Q\in \R^{m\times n}$ and upper triangular $R\in \R^{n\times n}$, such that, $A=QR$.
+\begin{algorithm}[H]
+    \caption{TSQR decomposition}
+    \begin{algorithmic} 
+    \REQUIRE $A \in \R^{m\times n}, m>>n$, $p$ parallel tasks
+    \ENSURE $A=QR$ for $Q\in \R^{m\times n }$, $Q^TQ=I$ and $R$ is upper triangular.
+    \STATE $Ar \leftarrow row\_wise\_partition(A,p)$
+    \STATE $Q1r,R1r \leftarrow QR(Ar)$
+    \STATE $R1 \leftarrow Gather(R1r,p)$
+    \STATE $Q2,R \leftarrow Qr(R1)$
+    \STATE $Q2r \leftarrow row\_wise\_partition(Q2r)$ \COMMENT{Same parition bounds as $A$}
+    \STATE $Q\leftarrow Q1r \times Q2r$
+    \RETURN $Q,R$
+    \end{algorithmic}
+\end{algorithm}
+
+\end{frame}
+
+\begin{frame}{Comparison study}
+The following 3 implementations are considered in this performance evaluation. 
+\begin{itemize}
+    \item Parla QR + Cupy
+    \item Python thread pool execution + Cupy
+    \item Python MPI + Cupy
+\end{itemize}
+Github : \href{https://github.com/milindasf/TSQR}{https://github.com/milindasf/TSQR}
+\end{frame}
+
+\begin{frame}
+\frametitle{Experimental Setup}
+The experiments are conducted in Frontera, GPU cluster, where a single node consists of Two Intel Xeon E5-2620 v4 (“Broadwell”) with four NVIDIA Quadro RTX5000 GPUs.
+\end{frame}
+
+\begin{frame}
+\frametitle{TSQR overall runtime}
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+                ybar, 
+                symbolic x coords={1K,10K,100K,1000K},
+                xtick=data,
+                width=11cm,
+                height=4.5cm,
+                grid=major,
+                xlabel={number of rows $\rightarrow$}, ylabel={runtime (s) $\rightarrow$},
+                %legend pos= north west,
+                legend columns=2,
+                legend style={at={(0.5,-0.35)},anchor=north},
+                bar width=0.2cm,
+            ]
+            %\addplot[bar shift=-0.6cm,fill=green!30] table[x={Rows},y={total_max}]{dat/frontera_mpi_gpu_v1.dat};
+            \addplot[bar shift=-0.4cm,fill=green!70] table[x={Rows},y={total_max}]{dat/frontera_mpi_gpu_v3.dat};
+            \addplot[bar shift=-0.2cm,fill=blue!30] table[x={Rows},y={total}]{dat/frontera_sm_gpu.dat};
+            \addplot[bar shift=0.0cm,fill=orange!30] table[x={Rows},y={total}]{dat/frontera_parla_gpu_t4.dat};
+            \addplot[bar shift=0.2cm,fill=red!30] table[x={Rows},y={total}]{dat/frontera_parla_gpu_t8.dat};
+            \addplot[bar shift=0.4cm,fill=yellow!30] table[x={Rows},y={total}]{dat/frontera_parla_gpu_t16.dat};
+            \legend{MPI + Cupy, Threads + Cupy, Parla + Cupy (4 blocks), Parla + Cupy (8 blocks), Parla + Cupy (16 blocks) }
+        \end{axis}
+    \end{tikzpicture}
+    \caption{Single node performance for TSQR algorithm implemented using Cupy where the parallelism was achieved by Python MPI, Python threading and Parla framework in Frontera GPU cluster. This experiment matrix column size was fixed at 100 columns.\label{fig:parla_overall}}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+\frametitle{TSQR cost breakdown}
+\begin{figure}[!tbhp]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+                ybar stacked, 
+                symbolic x coords={1K,10K,100K,1000K},
+                xtick=data,
+                width=11cm,
+                height=4.5cm,
+                grid=major,
+                xlabel={number of rows $\rightarrow$}, ylabel={runtime (s) $\rightarrow$},
+                %legend pos= north west,
+                legend columns=4,
+                legend style={at={(0.5,-0.35)},anchor=north},
+                bar width=0.2cm,
+            ]
+            \addplot[bar shift=-0.35cm,fill=red!30] table[x={Rows},y={kernel_gpu_max}]{dat/frontera_mpi_gpu_v3.dat};
+            \addplot[bar shift=-0.35cm,fill=blue!30] table[x={Rows},y={H2D_max}]{dat/frontera_mpi_gpu_v3.dat};
+            \addplot[bar shift=-0.35cm,fill=orange!30] table[x={Rows},y={D2H_max}]{dat/frontera_mpi_gpu_v3.dat};
+            \addplot[bar shift=-0.35cm,fill=green!30] table[x={Rows},y={mpi_comm_max}]{dat/frontera_mpi_gpu_v3.dat};
+            \addplot[bar shift=-0.35cm,fill=yellow!30] table[x={Rows},y expr=\thisrow{total_max}-\thisrow{kernel_gpu_max}-\thisrow{H2D_max}-\thisrow{D2H_max}-\thisrow{mpi_comm_max}]{dat/frontera_mpi_gpu_v3.dat};
+            \resetstackedplots
+            \addplot[bar shift=-0.1cm,fill=red!30, postaction={pattern=north east lines}] table[x={Rows},y={kernel_gpu_max}]{dat/frontera_sm_gpu.dat};
+            \addplot[bar shift=-0.1cm,fill=blue!30, postaction={pattern=north east lines}] table[x={Rows},y={H2D_max}]{dat/frontera_sm_gpu.dat};
+            \addplot[bar shift=-0.1cm,fill=orange!30,postaction={pattern=north east lines}] table[x={Rows},y={D2H_max}]{dat/frontera_sm_gpu.dat};
+            \addplot[bar shift=-0.1cm,fill=yellow!30,postaction={pattern=north east lines}] table[x={Rows},y expr=\thisrow{total}-\thisrow{kernel_gpu_max}-\thisrow{H2D_max}-\thisrow{D2H_max}]{dat/frontera_sm_gpu.dat};
+            \resetstackedplots
+            \addplot[bar shift=0.15cm,fill=red!30, postaction={pattern=dots}] table[x={Rows},y expr=\thisrow{qr1}]{dat/frontera_parla_gpu_t4.dat};
+            \addplot[bar shift=0.15cm,fill=blue!30, postaction={pattern=dots}] table[x={Rows},y expr=\thisrow{qr2}]{dat/frontera_parla_gpu_t4.dat};
+            \addplot[bar shift=0.15cm,fill=green!30, postaction={pattern=dots}] table[x={Rows},y expr=\thisrow{mm}]{dat/frontera_parla_gpu_t4.dat};
+            \resetstackedplots
+            \addplot[bar shift=0.4cm,fill=red!30, postaction={pattern=grid}] table[x={Rows},y expr=\thisrow{qr1}]{dat/frontera_parla_gpu_t8.dat};
+            \addplot[bar shift=0.4cm,fill=blue!30, postaction={pattern=grid}] table[x={Rows},y expr=\thisrow{qr2}]{dat/frontera_parla_gpu_t8.dat};
+            \addplot[bar shift=0.4cm,fill=green!30, postaction={pattern=grid}] table[x={Rows},y expr=\thisrow{mm}]{dat/frontera_parla_gpu_t8.dat};
+            \legend{GPU(MPI),H2D(MPI),D2H(MPI),COMM(MPI),Other (MPI), GPU(SM),H2D(SM),D2H(SM), Other (SM), Parla 4 (qr1),Parla 4 (qr2), Parla 4 (mm), Parla 8 (q1), Parla 8 (q2), Parla 8 (mm)}
+        \end{axis}
+    \end{tikzpicture}
+    % \caption{Single node performance for TSQR algorithm implemented using Cupy where the parallelism achieved by, Python MPI, Python threading and Parla framework in Frontera GPU cluster. For this experiment matrix column size was fixed at 100 columns.}
+    %\caption{Overall cost breakdown for MPI + Cupy, Threads + Cupy and Parla using 4 and 8 blocks on 4 GPUs. Note that each block is considered a task. q1 denotes the first QR decomposition on the GPU, q2 denotes the second QR decomposition on the CPU, and mm denotes the GPU matrix-matrix multiplication for final Q matrix computation. \label{fig:parla_breakdown} }
+\end{figure}
+\end{frame}
+
+\begin{frame}{Insight to performance results}
+    \begin{itemize}
+        \item cupy data transfers
+        \item cupy.linalg.qr (used in blocked QR) \& numpy.linalg.qr (second QR)
+        \item cupy.matmult
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Cupy data transfer (single GPU)}
+    \begin{figure}[H]
+        \centering
+        \begin{tikzpicture}
+            \begin{axis}[
+                    symbolic x coords={1K,10K,100K,1000K},
+                    xtick=data,
+                    width=11cm,
+                    height=5cm,
+                    grid=major,
+                    xlabel={number of rows $\rightarrow$}, ylabel={GB/s $\rightarrow$ },
+                    %legend pos=outer north east,legend columns=1,
+                    legend columns=3,
+                    legend style={at={(0.5,-0.3)},anchor=north},
+                ]
+                \addplot[mark=*,red] table[x={NROWS},y={H2D_BW(GB/sec)}]{dat/rtx5000_qr_n10.dat};
+                \addplot[mark=square,blue] table[x={NROWS},y={H2D_BW(GB/sec)}]{dat/rtx5000_qr_n100.dat};
+                \addplot[mark=triangle,green] table[x={NROWS},y={H2D_BW(GB/sec)}]{dat/rtx5000_qr_n1000.dat};
+                \addplot[mark=*,red,dashed] table[x={NROWS},y={D2H_BW(GB/sec)}]{dat/rtx5000_qr_n10.dat};
+                \addplot[mark=square,blue,dashed] table[x={NROWS},y={D2H_BW(GB/sec)}]{dat/rtx5000_qr_n100.dat};
+                \addplot[mark=triangle,green,dashed] table[x={NROWS},y={D2H_BW(GB/sec)}]{dat/rtx5000_qr_n1000.dat};
+                
+                \legend{H2D (n=10),H2D (n=100), H2D (n=1000),D2H (n=10),D2H (n=100), D2H (n=1000)} 
+            \end{axis}
+        \end{tikzpicture}
+        \caption{Empirical data transfer bandwidth for cupy transfer of $2d$ numpy arrays. For a matrix $A$ with $m$ rows and $n$ columns, host to device (H2D) transfer has the complexity of $\mathbb{O}(mn)$. The device to host (D2H) transfers copy two cupy arrays (computed $Q,R$ factors) to numpy arrays with the complexity of $\mathbb{O}(mn + n^2)$.}
+    \end{figure}
+\end{frame}
+
+
+\begin{frame}{cupy.linalg.qr (single GPU)}
+    \begin{figure}[H]
+        \centering
+        \begin{tikzpicture}
+            \begin{axis}[
+                    symbolic x coords={1K,10K,100K,1000K},
+                    xtick=data,
+                    width=11cm,
+                    height=5cm,
+                    grid=major,
+                    xlabel={number of rows $\rightarrow$ }, ylabel={GFlops/s $\rightarrow$},
+                    %legend pos=outer north east,legend columns=1,
+                    legend columns=3,
+                    legend style={at={(0.5,-0.3)},anchor=north},
+                ]
+                \addplot[mark=*,red] table[x={NROWS},y={QR_FLOPS(GFlops/sec)}]{dat/rtx5000_qr_n10.dat};
+                \addplot[mark=square,blue] table[x={NROWS},y={QR_FLOPS(GFlops/sec)}]{dat/rtx5000_qr_n100.dat};
+                \addplot[mark=triangle,green] table[x={NROWS},y={QR_FLOPS(GFlops/sec)}]{dat/rtx5000_qr_n1000.dat};
+                \legend{n=10,n=100,n=1000} 
+            \end{axis}
+        \end{tikzpicture}
+        \caption{GFlops/s attained by \texttt{cupy.linalg.qr} where GFlops/s is computed based on $\mathbb{O}(2mn^2 - \frac{2}{3}n^3)$ floating point operations for different matrix sizes, on a single RTX5000 GPU node, where $n$ denotes the number of columns.}
+    \end{figure}
+\end{frame}
+
+
+\begin{frame}{numpy.linalg.qr (single GPU)}
+    \begin{figure}[H]
+        \centering
+        \begin{tikzpicture}
+            \begin{axis}[
+                    symbolic x coords={1K,10K,100K,1000K},
+                    xtick=data,
+                    width=11cm,
+                    height=6cm,
+                    grid=major,
+                    xlabel={number of rows $\rightarrow$ }, ylabel={GFlops/s $\rightarrow$},
+                    %legend pos=outer north east,legend columns=1,
+                    legend columns=3,
+                    legend style={at={(0.5,-0.25)},anchor=north},
+                ]
+                \addplot[mark=*,red] table[x={NROWS},y={QR_FLOPS(GFlops/sec)}]{dat/frontera_rtx_cpu_qr_n10.dat};
+                \addplot[mark=square,blue] table[x={NROWS},y={QR_FLOPS(GFlops/sec)}]{dat/frontera_rtx_cpu_qr_n100.dat};
+                \addplot[mark=triangle,green] table[x={NROWS},y={QR_FLOPS(GFlops/sec)}]{dat/frontera_rtx_cpu_qr_n1000.dat};
+                \legend{n=10,n=100,n=1000} 
+            \end{axis}
+        \end{tikzpicture}
+        \caption{GFlops/s attained by \texttt{numpy.linalg.qr} where GFlops/s is computed based on $\mathbb{O}(2mn^2 - \frac{2}{3}n^3)$ floating point operations for different matrix sizes, on frontera RTX partition CPU node, where $n$ denotes the number of columns.}
+    \end{figure}
+\end{frame}
+
+
+\begin{frame}{cupy.matmult (single GPU)}
+    \begin{figure}[H]
+        \centering
+        \begin{tikzpicture}
+            \begin{axis}[
+                    symbolic x coords={1K,10K,100K,1000K},
+                    xtick=data,
+                    width=11cm,
+                    height=6cm,
+                    grid=major,
+                    xlabel={number of rows $\rightarrow$ }, ylabel={GFlops/s $\rightarrow$},
+                    %legend pos=outer north east,legend columns=1,
+                    legend columns=3,
+                    legend style={at={(0.5,-0.25)},anchor=north},
+                ]
+                \addplot[mark=*,red] table[x={NROWS},y={MM_FLOPS(GFlops/sec)}]{dat/rtx5000_mm_n10.dat};
+                \addplot[mark=square,blue] table[x={NROWS},y={MM_FLOPS(GFlops/sec)}]{dat/rtx5000_mm_n100.dat};
+                \addplot[mark=triangle,green] table[x={NROWS},y={MM_FLOPS(GFlops/sec)}]{dat/rtx5000_mm_n1000.dat};
+                \legend{n=10,n=100,n=1000} 
+            \end{axis}
+        \end{tikzpicture}
+        \caption{GFlops/s  attained by \texttt{cupy.matmult} where  GFlops/s is computed based on $\mathbb{O}(mn(2n-1))$ floating point operations for different matrix sizes, on a single RTX5000 GPU node, where $n$ denotes the number of columns.}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Performance model (Shared memory multi-GPU case)}
+    \begin{align}
+        T(m,n,p) &= T(\frac{m}{p}, n)_{qr1,GPU}  + T(np,n)_{qr2,CPU} + T(\frac{m}{p},m)_{mm,GPU} \label{eq:qr_sm}
+    \end{align} where we can write, 
+    \begin{equation}
+        T(\frac{m}{p}, n)_{qr1,GPU} = \frac{mn}{pB_{H2D}} + \frac{\frac{2mn^2}{p} -\frac{2}{3}n^3}{QR_{gpu}} + \frac{n^2}{B_{D2H}} \label{eq:qr1_sm}
+    \end{equation}
+    \begin{equation}
+        T(np,n)_{qr2,CPU} = \frac{2pn^3 -\frac{2}{3}n^3}{QR_{cpu}} \label{eq:qr2_sm}
+    \end{equation}
+    \begin{equation}
+        T(\frac{m}{p},m)_{mm,GPU} = \frac{n^2}{B_{H2D}} + \frac{\frac{mn}{p}(2n-1)}{MM_{gpu}} + \frac{mn}{pH_{D2H}} \label{eq:mm_sm}
+    \end{equation}
+\end{frame}
+
+\begin{frame}{Blocked QR (cupy.linalg.qr)}
+    \begin{table}[!tbhp]
+        \begin{center}
+            \resizebox{\textwidth}{!}{
+            \begin{tabular}{ |c|c|c|c|c|c|c|c| } 
+             \hline
+             Rows & Cols & H2D(GB/s) &  D2H(GB/s)  &  QR(Flops/s) &  t1 (s) (runtime) & t2(s) (predicted) & t1-t2\\
+             \hline
+                1000	& 100 & 2.13 & 	1.12  &	2.35	& 0.014914022	& 0.001948	& 0.012966022 \\
+                10000	& 100 & 4.77 &  3.95  &	12.23	& 0.017084167	& 0.00443	& 0.012654167 \\
+                100000	& 100 & 4.71 &  6.08  &	22.21	& 0.045916252	& 0.026449	& 0.019467252 \\
+                1000000	& 100 & 4.57 &  2.86  &	34.87	& 0.212147208	& 0.184173	& 0.027974208 \\
+             \hline
+            \end{tabular}}
+        \end{center}
+        \caption{Table presents the predicted QR1 runtime (see (\ref{eq:qr1_sm})) based on the empirically compute bandwidths and flops/s for matrix rows of $\frac{m}{p} \times n$, where $p$ denotes the number of GPUs used for the actual computation. The difference between the predicted and the reported runtime is almost a constant.\label{tb:qr1}}
+    \end{table}
+\end{frame}
+
+\begin{frame}{final $Q$ computation (cupy.matmult)}
+    \begin{table}[!tbhp]
+        \begin{center}
+            \resizebox{\textwidth}{!}{
+            \begin{tabular}{ |c|c|c|c|c|c|c|c| } 
+             \hline
+             Rows & Cols & H2D(GB/s) &  D2H(GB/s)  &  MM(Flops/s) &  t1 (s) (runtime) & t2(s) (predicted) & t1-t2\\
+             \hline
+                1000	& 100 & 2.29	& 2.40 & 	28.38   &	0.00404992	& 0.000185	& 0.00386492\\
+                10000	& 100 & 4.85	& 4.97 & 	160.31  &	0.005135891	& 0.000358	& 0.004777891\\
+                100000	& 100 & 4.98	& 6.66 &    209.65  &	0.011140349	& 0.002726	& 0.008414349\\
+                1000000	& 100 & 4.21	& 2.91 & 	225.91  &	0.119347156	& 0.030051	& 0.089296156\\
+             \hline
+            \end{tabular}}
+        \end{center}
+        \caption{Table presents the predicted MM runtime (see (\ref{eq:mm_sm})) based on the empirically compute bandwidths and flops/s for matrix rows of $\frac{m}{p} \times n$, where $p$ denotes the number of GPUs used for the actual computation. The difference between the predicted and the reported runtime grows with $\frac{m}{p}$. \label{tb:mm}}
+    \end{table}    
+\end{frame}
+
+
+\begin{frame}
+    \begin{center}
+        \Large Questions ?\\
+        \Large Thank You. 
+    \end{center}
+\end{frame}
+
+
+\end{document}
