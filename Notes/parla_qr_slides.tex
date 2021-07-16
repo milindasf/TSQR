@@ -8,6 +8,7 @@
 \usepackage{algorithmic}
 \usepackage{pgfplots}
 \usepackage{hyperref}
+\usepackage{listings}
 \usetikzlibrary{patterns}
 
 \makeatletter
@@ -25,7 +26,7 @@
 \newcommand{\R}{\mathbb{R}}
 
 %Information to be included in the title page:
-\title{Parla performance analysis for TSQR factorization}
+\title{Parla performance comparison for TSQR factorization}
 \author{Milinda Fernando}
 \institute{Parla Group Meeting}
 \date{July $16^{th}$, 2021}
@@ -42,13 +43,13 @@ For $A\in \R^{m\times n}$, $m>>n$ find orthogonal $Q\in \R^{m\times n}$ and uppe
     \begin{algorithmic} 
     \REQUIRE $A \in \R^{m\times n}, m>>n$, $p$ parallel tasks
     \ENSURE $A=QR$ for $Q\in \R^{m\times n }$, $Q^TQ=I$ and $R$ is upper triangular.
-    \STATE $Ar \leftarrow row\_wise\_partition(A,p)$
-    \STATE $Q1r,R1r \leftarrow QR(Ar)$
-    \STATE $R1 \leftarrow Gather(R1r,p)$
-    \STATE $Q2,R \leftarrow Qr(R1)$
-    \STATE $Q2r \leftarrow row\_wise\_partition(Q2r)$ \COMMENT{Same parition bounds as $A$}
-    \STATE $Q\leftarrow Q1r \times Q2r$
-    \RETURN $Q,R$
+    \STATE $Ar \leftarrow row\_wise\_partition(A,p)$ \COMMENT{$A_r\in \R^{\frac{m}{p}\times n}$}
+    \STATE $Q1r,R1r \leftarrow QR(Ar)$ \COMMENT{$Q1r\in \R^{\frac{m}{p}\times n}, R1r\in \R^{ n \times n}, $}
+    \STATE $R1 \leftarrow Gather(R1r,p)$ \COMMENT{$R1\in \R^{pn \times n}$}
+    \STATE $Q2,R \leftarrow Qr(R1)$ \COMMENT{$Q2 \in \R^{np\times n}, R\in \R^{ n \times n}, $}
+    \STATE $Q2r \leftarrow row\_wise\_partition(Q2r)$ %\COMMENT{Same parition bounds as $A$}
+    \STATE $Qr\leftarrow Q1r \times Q2r$
+    \RETURN $Qr,R$
     \end{algorithmic}
 \end{algorithm}
 
@@ -274,7 +275,7 @@ The experiments are conducted in Frontera, GPU cluster, where a single node cons
     \end{equation}
 \end{frame}
 
-\begin{frame}{Blocked QR (cupy.linalg.qr)}
+\begin{frame}[fragile]{Blocked QR (cupy.linalg.qr)}
     \begin{table}[!tbhp]
         \begin{center}
             \resizebox{\textwidth}{!}{
@@ -291,9 +292,20 @@ The experiments are conducted in Frontera, GPU cluster, where a single node cons
         \end{center}
         \caption{Table presents the predicted QR1 runtime (see (\ref{eq:qr1_sm})) based on the empirically compute bandwidths and flops/s for matrix rows of $\frac{m}{p} \times n$, where $p$ denotes the number of GPUs used for the actual computation. The difference between the predicted and the reported runtime is almost a constant.\label{tb:qr1}}
     \end{table}
+    \pause
+    \begin{lstlisting}[language=Python, basicstyle=\tiny]
+with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+for t_id in range(num_threads):
+    result.append(executor.submit(block_gpu_qr,A_blocked[t_id],t_id,loc))
+
+for m in result:
+    Q1_GPU.append (m.result()[0])
+    R1_CPU.append (m.result()[1])
+    r1_time.append(m.result()[2])
+    \end{lstlisting}
 \end{frame}
 
-\begin{frame}{final $Q$ computation (cupy.matmult)}
+\begin{frame}[fragile]{Final $Q$ computation (cupy.matmult)}
     \begin{table}[!tbhp]
         \begin{center}
             \resizebox{\textwidth}{!}{
@@ -308,8 +320,20 @@ The experiments are conducted in Frontera, GPU cluster, where a single node cons
              \hline
             \end{tabular}}
         \end{center}
-        \caption{Table presents the predicted MM runtime (see (\ref{eq:mm_sm})) based on the empirically compute bandwidths and flops/s for matrix rows of $\frac{m}{p} \times n$, where $p$ denotes the number of GPUs used for the actual computation. The difference between the predicted and the reported runtime grows with $\frac{m}{p}$. \label{tb:mm}}
-    \end{table}    
+        \caption{Table presents the predicted MM runtime based on the empirically compute bandwidths and flops/s for matrix rows of $\frac{m}{p} \times n$, where $p$ denotes the number of GPUs used for the actual computation. The difference between the predicted and the reported runtime grows with $\frac{m}{p}$. \label{tb:mm}}
+    \end{table}   
+    \pause
+    \begin{lstlisting}[language=Python, basicstyle=\tiny]
+with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+for t_id in range(num_threads):
+    # partition boundary. 
+    [rb,re]=row_partition_bounds(rows,t_id,num_threads)
+    result.append(executor.submit(block_gpu_matmult,Q1_GPU[t_id],Q2[rb:re,:],t_id,loc))
+
+for m in result:
+    Q2_CPU.append(m.result()[0])
+    r3_time.append(m.result()[1])
+    \end{lstlisting}
 \end{frame}
 
 
