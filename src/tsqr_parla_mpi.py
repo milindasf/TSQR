@@ -378,8 +378,9 @@ async def tsqr_blocked_mpi(Ar,comm,block_size):
     t1_total.stop()
     #t1_tot_end = time()
     #perf_stats.t1_tot = t1_tot_end - t1_tot_start
-
+    t_comm_mpi.start()
     R1=gather_mat(R1,comm)
+    t_comm_mpi.stop()
 
     # Perform intermediate qr factorization on R1 to get Q2 and final R
     t2_total.start()
@@ -400,8 +401,10 @@ async def tsqr_blocked_mpi(Ar,comm,block_size):
     Q2, R = await t2
     t2_total.stop()
     
+    t_comm_mpi.start()
     Q2 = scatter_mat(Q2,comm)
     R   = comm.bcast(R)
+    t_comm_mpi.stop()
     
     # Partition Q2 (same partitioning scheme, share the mapper)
     Q2_blocked = mapper.partition_tensor(Q2)
@@ -529,6 +532,7 @@ def main():
             t1_total.reset()
             t2_total.reset()
             t3_total.reset()
+            t_comm_mpi.reset()
 
             for tt in ts:
                 for t in tt:
@@ -540,7 +544,7 @@ def main():
             t_overall.stop()
             if ((iter >= WARMUP)):
                     if(not t_header):
-                        header="iter\ttotal_min\ttotal_max\tqr1_min\tqr1_max\tqr2_min\tqr2_max\tmm_min\tmm_max"
+                        header="iter\ttotal_min\ttotal_max\tmpi_comm_min\tmpi_comm_max\tqr1_min\tqr1_max\tqr2_min\tqr2_max\tmm_min\tmm_max"
                         for t in ts:
                             header+="\t"+t[0].name+"_min"
                             header+="\t"+t[0].name+"_max"
@@ -550,11 +554,16 @@ def main():
 
                         t_header=True
                     
+                    t_    = f"{iter}"
                     t_dur = t_overall.seconds
                     t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
                     t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
-                    t_    = f"{iter}"
+                    if(not rank):
+                        t_+=f"\t{t_min:.12f}\t{t_max:.12f}"
                     
+                    t_dur = t_comm_mpi.seconds
+                    t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
+                    t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
                     if(not rank):
                         t_+=f"\t{t_min:.12f}\t{t_max:.12f}"
                     
@@ -655,9 +664,11 @@ if __name__ == "__main__":
     rank = comm.Get_rank()
     npes = comm.Get_size()
 
-    t1_total = profile_t("t1_total") 
-    t2_total = profile_t("t2_total")
-    t3_total = profile_t("t3_total")
+    t1_total   = profile_t("t1_total") 
+    t2_total   = profile_t("t2_total")
+    t3_total   = profile_t("t3_total")
+    t_comm_mpi = profile_t("mpi_comm")
+
     t_h2d    = [profile_t("h2d")]    * NTASKS
     t_d2h    = [profile_t("d2h")]    * NTASKS
     t_qr_cpu = [profile_t("qr_cpu")] * NTASKS
@@ -667,6 +678,7 @@ if __name__ == "__main__":
     
     if(not rank):
         print('%**********************************************************************************************%\n')
+        print("number of mpi tasks: ",npes)
         print('Config: rows=', NROWS, ' cols=', NCOLS, ' block_size=', BLOCK_SIZE, ' iterations=', ITERS, ' warmup=', WARMUP, \
             ' threads=', NTHREADS, ' ngpus=', NGPUS, ' placement=', PLACEMENT_STRING, ' check_result=', CHECK_RESULT, ' csv=', CSV, sep='')
 
