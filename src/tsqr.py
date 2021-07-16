@@ -185,29 +185,13 @@ def check_result(Ar,Qr,Rr,comm):
     is_prod_valid = np.allclose(Ar,np.matmul(Qr,Rr))
     is_prod_valid = comm.reduce(is_prod_valid,root=0,op=MPI.LAND)
 
-    # Check orthonormal without gathering the matrix (does distributed MatMatMult and we don't need to store the result)
-    # compute the Q^T x Q in the distributed manner. 
-    #QTQ = np.zeros((Qr.shape[1],Qr.shape[1]),dtype=Qr.dtype)
-    vec_temp   = np.zeros((1,Qr.shape[1]), dtype=Qr.dtype)
-    vec_temp_g = np.zeros((1,Qr.shape[1]), dtype=Qr.dtype)
-    eye_i_vec  = np.zeros((1,Qr.shape[1]), dtype=Qr.dtype)
-    #QrT = Qr.transpose()
-
-    is_Q_valid = True
-    for col in range(0,Qr.shape[1]):
-        # each col in the resultant matrix is the span of the QrT cols with col coefficients of the Qr matrix followed by a reduction operator. 
-        vec_temp[0,:]    = 0.0
-        eye_i_vec[0,:]   = 0.0
-        eye_i_vec[0,col] = 1.0
-        for i in range(0,Qr.shape[0]):
-            vec_temp[0,:] = vec_temp[0,:] + (Qr[i,:] * Qr[i,col])
-            
-        comm.Reduce(vec_temp,vec_temp_g,root=0,op=MPI.SUM)
-        if(not rank):
-            if(not np.allclose(vec_temp_g,eye_i_vec)):
-                print("Q is not orthonomal: %d ^th row is : %s" %(col,vec_temp_g))
-                is_Q_valid = False
-                break
+    QTQ   = np.matmul(np.transpose(Qr),Qr)
+    QTQ_g = np.zeros((Qr.shape[1],Qr.shape[1]))
+    comm.Reduce(QTQ,QTQ_g,root=0,op=MPI.SUM)
+    
+    if(not rank):
+        is_Q_valid = np.allclose(QTQ_g,np.eye(Qr.shape[1]))
+    
     
     # Check R is upper triangular
     is_upper_R = np.allclose(Rr, np.triu(Rr))
@@ -737,7 +721,7 @@ def tsqr_driver(comm):
 
     if MODE == "MPI":
         for iter in range(0,WARMUP + ITERS):
-            np.random.seed(iter)
+            np.random.seed(iter*rank)
             # generate a partitioned random matrix. 
             Ar = partitioned_rand_mat(NROWS,NCOLS,comm)
             
@@ -796,7 +780,7 @@ def tsqr_driver(comm):
     elif MODE == "MPI+CUDA":
         
         for iter in range(0,WARMUP+ITERS):
-            np.random.seed(iter)
+            np.random.seed(iter*rank)
             # gen. partitioned matrix. 
             Ar = partitioned_rand_mat(NROWS,NCOLS,comm)
 
