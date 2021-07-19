@@ -354,53 +354,6 @@ This section presents, the weak and strong scaling results for distributed memor
     }
 \end{figure}
 
-\begin{figure}[!tbhp]
-    \centering
-    \begin{tikzpicture}
-        \begin{axis}[
-                ybar stacked, 
-                symbolic x coords={1,2,4,8,16},
-                xtick=data,
-                width=12cm,
-                height=4.5cm,
-                grid=major,
-                xlabel={number of nodes $\rightarrow$}, ylabel={runtime (s) $\rightarrow$},
-                %legend pos= north west,
-                legend columns=4,
-                legend style={at={(0.5,-0.35)},anchor=north},
-                bar width=0.2cm,
-            ]
-            %\addplot[bar shift=-0.6cm,fill=green!30] table[x={Rows},y={total_max}]{dat/frontera_mpi_gpu_v1.dat};
-            \addplot[bar shift=-0.25cm,fill=blue!20] table[x={nodes},y={mm_gpu_max}]   {dat/frontera_parla_ws_gz_1K.dat};
-            \addplot[bar shift=-0.25cm,fill=orange!20] table[x={nodes},y={qr2_max}]    {dat/frontera_parla_ws_gz_1K.dat};
-            \addplot[bar shift=-0.25cm,fill=red!20] table[x={nodes},y={qr_gpu_max}]    {dat/frontera_parla_ws_gz_1K.dat};
-            \addplot[bar shift=-0.25cm,fill=yellow!20] table[x={nodes},y={d2h_max}]     {dat/frontera_parla_ws_gz_1K.dat};
-            \addplot[bar shift=-0.25cm,fill=cyan!20] table[x={nodes},y={h2d_max}]     {dat/frontera_parla_ws_gz_1K.dat};
-            \addplot[bar shift=-0.25cm,fill=green!20] table[x={nodes},y={mpi_comm_max}]{dat/frontera_parla_ws_gz_1K.dat};
-            \addplot[bar shift=-0.25cm,fill=black!20] table[x={nodes},y expr=\thisrow{total_max} -\thisrow{mpi_comm_max} -\thisrow{h2d_max}-\thisrow{d2h_max}-\thisrow{qr_gpu_max} -\thisrow{qr2_max} -\thisrow{mm_gpu_max} ]{dat/frontera_parla_ws_gz_1K.dat};
-            % \resetstackedplotsOne
-            % \addplot[bar shift=0.0cm,fill=blue!20] table[x={nodes},y={mm_gpu_max}]    {dat/frontera_parla_ws_gz_10K.dat};
-            % \addplot[bar shift=0.0cm,fill=orange!20] table[x={nodes},y={qr2_max}]     {dat/frontera_parla_ws_gz_10K.dat};
-            % \addplot[bar shift=0.0cm,fill=red!20] table[x={nodes},y={qr_gpu_max}]     {dat/frontera_parla_ws_gz_10K.dat};
-            % \addplot[bar shift=0.0cm,fill=yellow!20] table[x={nodes},y={d2h_max}]     {dat/frontera_parla_ws_gz_10K.dat};
-            % \addplot[bar shift=0.0cm,fill=cyan!20] table[x={nodes},y={h2d_max}]     {dat/frontera_parla_ws_gz_10K.dat};
-            % \addplot[bar shift=0.0cm,fill=green!20] table[x={nodes},y={mpi_comm_max}] {dat/frontera_parla_ws_gz_10K.dat};
-            % \addplot[bar shift=0.0cm,fill=black!20] table[x={nodes},y expr=\thisrow{total_max} -\thisrow{mpi_comm_max}  ]{dat/frontera_parla_ws_gz_10K.dat};
-            % \resetstackedplotsOne
-            % \addplot[bar shift=0.25cm,fill=blue!20] table[x={nodes},y={mm_gpu_max}]    {dat/frontera_parla_ws_gz_100K.dat};
-            % \addplot[bar shift=0.25cm,fill=orange!20] table[x={nodes},y={qr2_max}]     {dat/frontera_parla_ws_gz_100K.dat};
-            % \addplot[bar shift=0.25cm,fill=red!20] table[x={nodes},y={qr_gpu_max}]     {dat/frontera_parla_ws_gz_100K.dat};
-            % \addplot[bar shift=0.25cm,fill=yellow!20] table[x={nodes},y={d2h_max}]     {dat/frontera_parla_ws_gz_100K.dat};
-            % \addplot[bar shift=0.25cm,fill=cyan!20] table[x={nodes},y={h2d_max}]       {dat/frontera_parla_ws_gz_100K.dat};
-            % \addplot[bar shift=0.25cm,fill=green!20] table[x={nodes},y={mpi_comm_max}] {dat/frontera_parla_ws_gz_100K.dat};
-            % \addplot[bar shift=0.25cm,fill=black!20] table[x={nodes},y expr=\thisrow{total_max} -\thisrow{mpi_comm_max} -\thisrow{h2d_max}-\thisrow{d2h_max}-\thisrow{qr_gpu_max} -\thisrow{qr2_max} -\thisrow{mm_gpu_max} ]{dat/frontera_parla_ws_gz_100K.dat};
-            \legend{GEMM(GPU), qr2(CPU), qr1(GPU), D2H, H2D, Comm (MPI), Other }
-        \end{axis}
-    \end{tikzpicture}
-    \caption{ Weak scaling results for three different grain sizes (i.e., number of rows per node) using MPI + Parla based TSQR implementation in Frontera across 64 GPUs. Weak scaling results for grain size 1000, 10K, and 100K are shown in the leftmost bar, middle bar, and the rightmost bar, respectively. \label{fig:parla_ws}
-    }
-\end{figure}
-
 \begin{figure}
     \centering
     \begin{tikzpicture}
