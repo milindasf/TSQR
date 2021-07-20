@@ -376,6 +376,7 @@ async def tsqr_blocked_mpi(Ar,comm,block_size):
 
     await t1
     t1_total.stop()
+    comm.barrier()
     #t1_tot_end = time()
     #perf_stats.t1_tot = t1_tot_end - t1_tot_start
     t_comm_mpi.start()
@@ -403,8 +404,8 @@ async def tsqr_blocked_mpi(Ar,comm,block_size):
     comm.barrier()
     
     t_comm_mpi.start()
-    Q2 = scatter_mat(Q2,comm)
     R   = comm.bcast(R)
+    Q2 = scatter_mat(Q2,comm)
     t_comm_mpi.stop()
     
     # Partition Q2 (same partitioning scheme, share the mapper)
@@ -440,6 +441,7 @@ async def tsqr_blocked_mpi(Ar,comm,block_size):
 
     await T3
     t3_total.stop()
+    comm.barrier()
     return Q, R
 
 

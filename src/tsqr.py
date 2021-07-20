@@ -682,7 +682,7 @@ def tsqr_mpi_gpu_v3(Ar, comm):
     t_kernel_gpu +=ts[1]
     t_d2h += ts[2]
 
-    
+    comm.barrier()
     # gather R1 to rank 0 (root) processor
     t_mpi_comm.start()
     R1g = gather_mat(R1,comm)
@@ -695,8 +695,6 @@ def tsqr_mpi_gpu_v3(Ar, comm):
     if(not rank):
         [Q2,R] = np.linalg.qr(R1g,mode='reduced')
     t_t2.stop()
-
-    # this is need to get the cost breakdown correctly. 
     comm.barrier()
 
     t_mpi_comm.start()
@@ -713,6 +711,7 @@ def tsqr_mpi_gpu_v3(Ar, comm):
     t_d2h += ts[2]
 
     _pref_stat = [t_t1, t_t2, t_t3, t_mpi_comm, t_h2d, t_d2h, t_kernel_gpu]
+    comm.barrier()
     
     return [Q,R,_pref_stat]
 
