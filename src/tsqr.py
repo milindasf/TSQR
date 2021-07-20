@@ -624,6 +624,8 @@ def tsqr_mpi_gpu_v2(Ar, comm):
         t_kernel_gpu += ts[1]
         t_d2h += ts[2]
     t_t2.stop()
+    # barrier for qr2
+    comm.barrier()
     
         
     t_mpi_comm.start()
@@ -693,6 +695,9 @@ def tsqr_mpi_gpu_v3(Ar, comm):
     if(not rank):
         [Q2,R] = np.linalg.qr(R1g,mode='reduced')
     t_t2.stop()
+
+    # this is need to get the cost breakdown correctly. 
+    comm.barrier()
 
     t_mpi_comm.start()
     R=comm.bcast(R)
@@ -769,6 +774,8 @@ def tsqr_driver(comm):
             #if(rank==0):
             #    print(A-np.dot(Qg,R))
 
+            # barrier for each iteration. 
+            comm.barrier()
             if CHECK_RESULT:
                 is_valid = check_result(Ar,Qr,Rr,comm)
                 if(not rank):
@@ -817,6 +824,9 @@ def tsqr_driver(comm):
                 if(not rank):
                     print(t_)
             
+            # barrier for each iteration. 
+            comm.barrier()
+
             if CHECK_RESULT:
                 is_valid = check_result(Ar,Qr,Rr,comm)
                 if(not rank):

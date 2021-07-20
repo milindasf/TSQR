@@ -400,6 +400,7 @@ async def tsqr_blocked_mpi(Ar,comm,block_size):
 
     Q2, R = await t2
     t2_total.stop()
+    comm.barrier()
     
     t_comm_mpi.start()
     Q2 = scatter_mat(Q2,comm)
@@ -600,7 +601,9 @@ def main():
 
                     if(not rank):
                         print(t_)
-
+            
+            # barrier for qr2
+            comm.barrier()
             # Check the results
             if CHECK_RESULT:
                 is_valid = check_result_mpi(Ar,Qr,Rr,comm)
