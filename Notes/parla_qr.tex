@@ -304,8 +304,11 @@ In contrast with partitioned QR, the final step of the TSQR algorithm is perform
     \caption{Table presents the predicted MM runtime (see (\ref{eq:mm_sm})) based on the empirically compute bandwidths and flops/s for matrix rows of $\frac{m}{p} \times n$, where $p$ denotes the number of GPUs used for the actual computation. The difference between the predicted and the reported runtime grows with $\frac{m}{p}$. \label{tb:mm}}
 \end{table}
 
-\subsection{MPI + Parla for TSQR}
-This section presents, the weak and strong scaling results for distributed memory TSQR factorization. In the following experiments, the distributed memory parallelism is handled by MPI, and the shared memory based multi-GPU parallelism is achieved through parla.
+\subsection{MPI + Parla  and MPI + Cupy Comparison}
+This section presents, the weak and strong scaling results for distributed memory TSQR factorization. In the following experiments, the distributed memory parallelism is handled by MPI, and the shared memory based multi-GPU parallelism is achieved through parla. In MPI+Parla hybrid parallelism, MPI processes is launched for each node, with four threads per process. In pure MPI + Cupy based distributed parallelism case, four MPI tasks are launched for each node. 
+
+\textbf{MPI Gather Operation}: In TSQR, the $R1r$ factors need to be gathered from the processors to perform the second QR factorization. The above operation has the complexity of $\mathbb{O}(pn^2\log(p))$. The input matrix size for the second QR factorization is $pn\times n$. Therefore the gather and the second QR factorization grows with $p$ for fixed $n$.
+
 
 \begin{figure}[!tbhp]
     \centering
@@ -321,40 +324,25 @@ This section presents, the weak and strong scaling results for distributed memor
                 %legend pos= north west,
                 legend columns=4,
                 legend style={at={(0.5,-0.35)},anchor=north},
-                bar width=0.2cm,
+                bar width=0.3cm,
             ]
-            %\addplot[bar shift=-0.6cm,fill=green!30] table[x={Rows},y={total_max}]{dat/frontera_mpi_gpu_v1.dat};
-            \addplot[bar shift=-0.25cm,fill=blue!20] table[x={nodes},y={mm_gpu_max}]   {dat/frontera_parla_ws_gz_1K.dat};
-            \addplot[bar shift=-0.25cm,fill=orange!20] table[x={nodes},y={qr2_max}]    {dat/frontera_parla_ws_gz_1K.dat};
-            \addplot[bar shift=-0.25cm,fill=red!20] table[x={nodes},y={qr_gpu_max}]    {dat/frontera_parla_ws_gz_1K.dat};
-            \addplot[bar shift=-0.25cm,fill=yellow!20] table[x={nodes},y={d2h_max}]     {dat/frontera_parla_ws_gz_1K.dat};
-            \addplot[bar shift=-0.25cm,fill=cyan!20] table[x={nodes},y={h2d_max}]     {dat/frontera_parla_ws_gz_1K.dat};
-            \addplot[bar shift=-0.25cm,fill=green!20] table[x={nodes},y={mpi_comm_max}]{dat/frontera_parla_ws_gz_1K.dat};
-            \addplot[bar shift=-0.25cm,fill=black!20] table[x={nodes},y expr=\thisrow{total_max} -\thisrow{mpi_comm_max} -\thisrow{h2d_max}-\thisrow{d2h_max}-\thisrow{qr_gpu_max} -\thisrow{qr2_max} -\thisrow{mm_gpu_max} ]{dat/frontera_parla_ws_gz_1K.dat};
+            \addplot[bar shift=-0.2cm,fill=red!20]    table[x={nodes},y={qr1_max}]        {dat/frontera_parla_c100_ws_gz_100K.dat};
+            \addplot[bar shift=-0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_parla_c100_ws_gz_100K.dat};
+            \addplot[bar shift=-0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_parla_c100_ws_gz_100K.dat};
+            \addplot[bar shift=-0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_parla_c100_ws_gz_100K.dat};
             \resetstackedplotsOne
-            \addplot[bar shift=0.0cm,fill=blue!20] table[x={nodes},y={mm_gpu_max}]    {dat/frontera_parla_ws_gz_10K.dat};
-            \addplot[bar shift=0.0cm,fill=orange!20] table[x={nodes},y={qr2_max}]     {dat/frontera_parla_ws_gz_10K.dat};
-            \addplot[bar shift=0.0cm,fill=red!20] table[x={nodes},y={qr_gpu_max}]     {dat/frontera_parla_ws_gz_10K.dat};
-            \addplot[bar shift=0.0cm,fill=yellow!20] table[x={nodes},y={d2h_max}]     {dat/frontera_parla_ws_gz_10K.dat};
-            \addplot[bar shift=0.0cm,fill=cyan!20] table[x={nodes},y={h2d_max}]     {dat/frontera_parla_ws_gz_10K.dat};
-            \addplot[bar shift=0.0cm,fill=green!20] table[x={nodes},y={mpi_comm_max}] {dat/frontera_parla_ws_gz_10K.dat};
-            \addplot[bar shift=0.0cm,fill=black!20] table[x={nodes},y expr=\thisrow{total_max} -\thisrow{mpi_comm_max}  ]{dat/frontera_parla_ws_gz_10K.dat};
-            \resetstackedplotsOne
-            \addplot[bar shift=0.25cm,fill=blue!20] table[x={nodes},y={mm_gpu_max}]    {dat/frontera_parla_ws_gz_100K.dat};
-            \addplot[bar shift=0.25cm,fill=orange!20] table[x={nodes},y={qr2_max}]     {dat/frontera_parla_ws_gz_100K.dat};
-            \addplot[bar shift=0.25cm,fill=red!20] table[x={nodes},y={qr_gpu_max}]     {dat/frontera_parla_ws_gz_100K.dat};
-            \addplot[bar shift=0.25cm,fill=yellow!20] table[x={nodes},y={d2h_max}]     {dat/frontera_parla_ws_gz_100K.dat};
-            \addplot[bar shift=0.25cm,fill=cyan!20] table[x={nodes},y={h2d_max}]       {dat/frontera_parla_ws_gz_100K.dat};
-            \addplot[bar shift=0.25cm,fill=green!20] table[x={nodes},y={mpi_comm_max}] {dat/frontera_parla_ws_gz_100K.dat};
-            \addplot[bar shift=0.25cm,fill=black!20] table[x={nodes},y expr=\thisrow{total_max} -\thisrow{mpi_comm_max} -\thisrow{h2d_max}-\thisrow{d2h_max}-\thisrow{qr_gpu_max} -\thisrow{qr2_max} -\thisrow{mm_gpu_max} ]{dat/frontera_parla_ws_gz_100K.dat};
-            \legend{GEMM(GPU), qr2(CPU), qr1(GPU), D2H, H2D, Comm (MPI), Other }
+            \addplot[postaction={pattern=north east lines}, bar shift=0.2cm,fill=red!20]    table[x={nodes},y={qr1_max}]        {dat/frontera_mpi_c100_ws_gz_100K.dat};
+            \addplot[postaction={pattern=north east lines}, bar shift=0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_mpi_c100_ws_gz_100K.dat};
+            \addplot[postaction={pattern=north east lines}, bar shift=0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_mpi_c100_ws_gz_100K.dat};
+            \addplot[postaction={pattern=north east lines}, bar shift=0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_mpi_c100_ws_gz_100K.dat};
+            \legend{qr1(MPI+Parla), qr2(MPI+Parla), MM(MPI+Parla), MPI\_Comm (MPI+Parla), qr1(MPI+Cupy), qr2(MPI+Cupy), MM(MPI+Cupy), MPI\_Comm(MPI+Cupy)}
         \end{axis}
     \end{tikzpicture}
-    \caption{ Weak scaling results for three different grain sizes (i.e., number of rows per node) using MPI + Parla based TSQR implementation in Frontera across 64 GPUs. Weak scaling results for grain size 1000, 10K, and 100K are shown in the leftmost bar, middle bar, and the rightmost bar, respectively. \label{fig:parla_ws}
+    \caption{The figure presents the weak scalability results for 100K rows per node and the number of columns fixed at 100 for MPI + Parla based hybrid parallelism and MPI + Cupy based implementations across 16 nodes (64 GPUs) in the Frontera GPU cluster. \label{fig:parla_ws_n100}
     }
 \end{figure}
 
-\begin{figure}
+\begin{figure}[!tbhp]
     \centering
     \begin{tikzpicture}
         \begin{axis}[
@@ -368,38 +356,90 @@ This section presents, the weak and strong scaling results for distributed memor
                 %legend pos= north west,
                 legend columns=4,
                 legend style={at={(0.5,-0.35)},anchor=north},
-                bar width=0.25cm,
+                bar width=0.3cm,
             ]
-            %\addplot[bar shift=-0.6cm,fill=green!30] table[x={Rows},y={total_max}]{dat/frontera_mpi_gpu_v1.dat};
-            \addplot[bar shift=0.0cm,fill=blue!20] table[x={nodes},y={mm_gpu_max}]   {dat/frontera_parla_ss_1600K.dat};
-            \addplot[bar shift=0.0cm,fill=orange!20] table[x={nodes},y={qr2_max}]    {dat/frontera_parla_ss_1600K.dat};
-            \addplot[bar shift=0.0cm,fill=red!20] table[x={nodes},y={qr_gpu_max}]    {dat/frontera_parla_ss_1600K.dat};
-            \addplot[bar shift=0.0cm,fill=yellow!20] table[x={nodes},y={d2h_max}]    {dat/frontera_parla_ss_1600K.dat};
-            \addplot[bar shift=0.0cm,fill=cyan!20] table[x={nodes},y={h2d_max}]      {dat/frontera_parla_ss_1600K.dat};
-            \addplot[bar shift=0.0cm,fill=green!20] table[x={nodes},y={mpi_comm_max}]{dat/frontera_parla_ss_1600K.dat};
-            \addplot[bar shift=0.0cm,fill=black!20] table[x={nodes},y expr=\thisrow{total_max} -\thisrow{mpi_comm_max} -\thisrow{h2d_max}-\thisrow{d2h_max}-\thisrow{qr_gpu_max} -\thisrow{qr2_max} -\thisrow{mm_gpu_max} ]{dat/frontera_parla_ss_1600K.dat};
-            % \resetstackedplotsOne
-            % \addplot[bar shift=0.0cm,fill=blue!20] table[x={nodes},y={mm_gpu_max}]    {dat/frontera_parla_ws_gz_10K.dat};
-            % \addplot[bar shift=0.0cm,fill=orange!20] table[x={nodes},y={qr2_max}]     {dat/frontera_parla_ws_gz_10K.dat};
-            % \addplot[bar shift=0.0cm,fill=red!20] table[x={nodes},y={qr_gpu_max}]     {dat/frontera_parla_ws_gz_10K.dat};
-            % \addplot[bar shift=0.0cm,fill=yellow!20] table[x={nodes},y={d2h_max}]     {dat/frontera_parla_ws_gz_10K.dat};
-            % \addplot[bar shift=0.0cm,fill=cyan!20] table[x={nodes},y={h2d_max}]     {dat/frontera_parla_ws_gz_10K.dat};
-            % \addplot[bar shift=0.0cm,fill=green!20] table[x={nodes},y={mpi_comm_max}] {dat/frontera_parla_ws_gz_10K.dat};
-            % \addplot[bar shift=0.0cm,fill=black!20] table[x={nodes},y expr=\thisrow{total_max} -\thisrow{mpi_comm_max}  ]{dat/frontera_parla_ws_gz_10K.dat};
-            % \resetstackedplotsOne
-            % \addplot[bar shift=0.25cm,fill=blue!20] table[x={nodes},y={mm_gpu_max}]    {dat/frontera_parla_ws_gz_100K.dat};
-            % \addplot[bar shift=0.25cm,fill=orange!20] table[x={nodes},y={qr2_max}]     {dat/frontera_parla_ws_gz_100K.dat};
-            % \addplot[bar shift=0.25cm,fill=red!20] table[x={nodes},y={qr_gpu_max}]     {dat/frontera_parla_ws_gz_100K.dat};
-            % \addplot[bar shift=0.25cm,fill=yellow!20] table[x={nodes},y={d2h_max}]     {dat/frontera_parla_ws_gz_100K.dat};
-            % \addplot[bar shift=0.25cm,fill=cyan!20] table[x={nodes},y={h2d_max}]       {dat/frontera_parla_ws_gz_100K.dat};
-            % \addplot[bar shift=0.25cm,fill=green!20] table[x={nodes},y={mpi_comm_max}] {dat/frontera_parla_ws_gz_100K.dat};
-            % \addplot[bar shift=0.25cm,fill=black!20] table[x={nodes},y expr=\thisrow{total_max} -\thisrow{mpi_comm_max} -\thisrow{h2d_max}-\thisrow{d2h_max}-\thisrow{qr_gpu_max} -\thisrow{qr2_max} -\thisrow{mm_gpu_max} ]{dat/frontera_parla_ws_gz_100K.dat};
-            \legend{GEMM(GPU), qr2(CPU), qr1(GPU), D2H, H2D, Comm (MPI), Other }
+            \addplot[bar shift=-0.2cm,fill=red!20]    table[x={nodes},y={qr1_max}]        {dat/frontera_parla_c1000_ws_gz_100K.dat};
+            \addplot[bar shift=-0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_parla_c1000_ws_gz_100K.dat};
+            \addplot[bar shift=-0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_parla_c1000_ws_gz_100K.dat};
+            \addplot[bar shift=-0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_parla_c1000_ws_gz_100K.dat};
+            \resetstackedplotsOne
+            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=red!20]    table[x={nodes},y={qr1_max}]        {dat/frontera_mpi_c1000_ws_gz_100K.dat};
+            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_mpi_c1000_ws_gz_100K.dat};
+            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_mpi_c1000_ws_gz_100K.dat};
+            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_mpi_c1000_ws_gz_100K.dat};
+            \legend{qr1(MPI+Parla), qr2(MPI+Parla), MM(MPI+Parla), MPI\_Comm (MPI+Parla), qr1(MPI+Cupy), qr2(MPI+Cupy), MM(MPI+Cupy), MPI\_Comm(MPI+Cupy)}
         \end{axis}
     \end{tikzpicture}
-    \caption{ Strong scaling results for fixed matrix size of $1.6M \times 100$ using MPI + Parla based TSQR implementation in Frontera across 64 GPUs. \label{fig:parla_ss}}
+    \caption{The figure presents the weak scalability results for 100K rows per node and the number of columns fixed at 1000 for MPI + Parla based hybrid parallelism and MPI + Cupy based implementations across 16 nodes (64 GPUs) in the Frontera GPU cluster.\label{fig:parla_ws_n1000}
+    }
 \end{figure}
 
+\begin{figure}[!tbhp]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+                ybar stacked, 
+                symbolic x coords={1,2,4,8,16},
+                xmin=1,
+                xtick=data,
+                width=12cm,
+                height=4.5cm,
+                grid=major,
+                xlabel={number of nodes $\rightarrow$}, ylabel={runtime (s) $\rightarrow$},
+                %legend pos= north west,
+                legend columns=4,
+                legend style={at={(0.5,-0.35)},anchor=north},
+                bar width=0.3cm,
+            ]
+            \addplot[bar shift=-0.2cm,fill=red!20]    table[x={nodes},y={qr1_max}]        {dat/frontera_parla_c100_ss_1600K.dat};
+            \addplot[bar shift=-0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_parla_c100_ss_1600K.dat};
+            \addplot[bar shift=-0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_parla_c100_ss_1600K.dat};
+            \addplot[bar shift=-0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_parla_c100_ss_1600K.dat};
+            \resetstackedplotsOne
+            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=red!20]    table[x={nodes},y={qr1_max}]        {dat/frontera_mpi_c100_ss_1600K.dat};
+            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_mpi_c100_ss_1600K.dat};
+            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_mpi_c100_ss_1600K.dat};
+            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_mpi_c100_ss_1600K.dat};
+            \legend{qr1(MPI+Parla), qr2(MPI+Parla), MM(MPI+Parla), MPI\_Comm (MPI+Parla), qr1(MPI+Cupy), qr2(MPI+Cupy), MM(MPI+Cupy), MPI\_Comm(MPI+Cupy)}
+        \end{axis}
+    \end{tikzpicture}
+    \caption{The figure presents the strong scalability results for a fixed matrix size of $1.6M \times 100$ for MPI + Parla based hybrid parallelism and MPI + Cupy based implementations across 16 nodes (64 GPUs) in the Frontera GPU cluster.\label{fig:parla_ss_n100}
+    }
+\end{figure}
+
+
+\begin{figure}[!tbhp]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+                ybar stacked, 
+                symbolic x coords={1,2,4,8,16},
+                xmin=1,
+                xtick=data,
+                width=12cm,
+                height=4.5cm,
+                grid=major,
+                xlabel={number of nodes $\rightarrow$}, ylabel={runtime (s) $\rightarrow$},
+                %legend pos= north west,
+                legend columns=4,
+                legend style={at={(0.5,-0.35)},anchor=north},
+                bar width=0.3cm,
+            ]
+            \addplot[bar shift=-0.2cm,fill=red!20]    table[x={nodes},y={qr1_max}]        {dat/frontera_parla_c1000_ss_1600K.dat};
+            \addplot[bar shift=-0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_parla_c1000_ss_1600K.dat};
+            \addplot[bar shift=-0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_parla_c1000_ss_1600K.dat};
+            \addplot[bar shift=-0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_parla_c1000_ss_1600K.dat};
+            \resetstackedplotsOne
+            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=red!20]    table[x={nodes},y={qr1_max}]        {dat/frontera_mpi_c1000_ss_1600K.dat};
+            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_mpi_c1000_ss_1600K.dat};
+            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_mpi_c1000_ss_1600K.dat};
+            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_mpi_c1000_ss_1600K.dat};
+            \legend{qr1(MPI+Parla), qr2(MPI+Parla), MM(MPI+Parla), MPI\_Comm (MPI+Parla), qr1(MPI+Cupy), qr2(MPI+Cupy), MM(MPI+Cupy), MPI\_Comm(MPI+Cupy)}
+        \end{axis}
+    \end{tikzpicture}
+    \caption{The figure presents the strong scalability results for a fixed matrix size of $1.6M \times 1000$ for MPI + Parla based hybrid parallelism and MPI + Cupy based implementations across 16 nodes (64 GPUs) in the Frontera GPU cluster.\label{fig:parla_ss_n100}
+    }
+\end{figure}
 
 \bibliographystyle{plain}
 \bibliography{parla_qr}
