@@ -322,7 +322,7 @@ This section presents, the weak and strong scaling results for distributed memor
                 grid=major,
                 xlabel={number of nodes $\rightarrow$}, ylabel={runtime (s) $\rightarrow$},
                 %legend pos= north west,
-                legend columns=4,
+                legend columns=3,
                 legend style={at={(0.5,-0.35)},anchor=north},
                 bar width=0.3cm,
             ]
@@ -330,12 +330,14 @@ This section presents, the weak and strong scaling results for distributed memor
             \addplot[bar shift=-0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_parla_c100_ws_gz_100K.dat};
             \addplot[bar shift=-0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_parla_c100_ws_gz_100K.dat};
             \addplot[bar shift=-0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_parla_c100_ws_gz_100K.dat};
+            \addplot[bar shift=-0.2cm,fill=black!20]  table[x={nodes},y={overhead}]       {dat/frontera_parla_c100_ws_gz_100K.dat};
             \resetstackedplotsOne
             \addplot[postaction={pattern=north east lines}, bar shift=0.2cm,fill=red!20]    table[x={nodes},y={qr1_max}]        {dat/frontera_mpi_c100_ws_gz_100K.dat};
             \addplot[postaction={pattern=north east lines}, bar shift=0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_mpi_c100_ws_gz_100K.dat};
             \addplot[postaction={pattern=north east lines}, bar shift=0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_mpi_c100_ws_gz_100K.dat};
             \addplot[postaction={pattern=north east lines}, bar shift=0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_mpi_c100_ws_gz_100K.dat};
-            \legend{qr1(MPI+Parla), qr2(MPI+Parla), MM(MPI+Parla), MPI\_Comm (MPI+Parla), qr1(MPI+Cupy), qr2(MPI+Cupy), MM(MPI+Cupy), MPI\_Comm(MPI+Cupy)}
+            \addplot[postaction={pattern=north east lines}, bar shift=0.2cm,fill=black!20]  table[x={nodes},y={overhead}]       {dat/frontera_mpi_c100_ws_gz_100K.dat};
+            \legend{qr1(MPI+Parla), qr2(MPI+Parla), MM(MPI+Parla), MPI\_Comm (MPI+Parla), other(MPI+Parla), qr1(MPI+Cupy), qr2(MPI+Cupy), MM(MPI+Cupy), MPI\_Comm(MPI+Cupy), other (MPI+Cupy)}
         \end{axis}
     \end{tikzpicture}
     \caption{The figure presents the weak scalability results for 100K rows per node and the number of columns fixed at 100 for MPI + Parla based hybrid parallelism and MPI + Cupy based implementations across 16 nodes (64 GPUs) in the Frontera GPU cluster. \label{fig:parla_ws_n100}
@@ -354,7 +356,7 @@ This section presents, the weak and strong scaling results for distributed memor
                 grid=major,
                 xlabel={number of nodes $\rightarrow$}, ylabel={runtime (s) $\rightarrow$},
                 %legend pos= north west,
-                legend columns=4,
+                legend columns=3,
                 legend style={at={(0.5,-0.35)},anchor=north},
                 bar width=0.3cm,
             ]
@@ -362,12 +364,14 @@ This section presents, the weak and strong scaling results for distributed memor
             \addplot[bar shift=-0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_parla_c1000_ws_gz_100K.dat};
             \addplot[bar shift=-0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_parla_c1000_ws_gz_100K.dat};
             \addplot[bar shift=-0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_parla_c1000_ws_gz_100K.dat};
+            \addplot[bar shift=-0.2cm,fill=black!20]  table[x={nodes},y={overhead}]       {dat/frontera_parla_c1000_ws_gz_100K.dat};
             \resetstackedplotsOne
-            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=red!20]    table[x={nodes},y={qr1_max}]        {dat/frontera_mpi_c1000_ws_gz_100K.dat};
-            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_mpi_c1000_ws_gz_100K.dat};
-            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_mpi_c1000_ws_gz_100K.dat};
-            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_mpi_c1000_ws_gz_100K.dat};
-            \legend{qr1(MPI+Parla), qr2(MPI+Parla), MM(MPI+Parla), MPI\_Comm (MPI+Parla), qr1(MPI+Cupy), qr2(MPI+Cupy), MM(MPI+Cupy), MPI\_Comm(MPI+Cupy)}
+            \addplot[postaction={pattern=north east lines}, bar shift=0.2cm,fill=red!20]    table[x={nodes},y={qr1_max}]        {dat/frontera_mpi_c1000_ws_gz_100K.dat};
+            \addplot[postaction={pattern=north east lines}, bar shift=0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_mpi_c1000_ws_gz_100K.dat};
+            \addplot[postaction={pattern=north east lines}, bar shift=0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_mpi_c1000_ws_gz_100K.dat};
+            \addplot[postaction={pattern=north east lines}, bar shift=0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_mpi_c1000_ws_gz_100K.dat};
+            \addplot[postaction={pattern=north east lines}, bar shift=0.2cm,fill=black!20]  table[x={nodes},y={overhead}]       {dat/frontera_mpi_c1000_ws_gz_100K.dat};
+            \legend{qr1(MPI+Parla), qr2(MPI+Parla), MM(MPI+Parla), MPI\_Comm (MPI+Parla), other(MPI+Parla), qr1(MPI+Cupy), qr2(MPI+Cupy), MM(MPI+Cupy), MPI\_Comm(MPI+Cupy), other (MPI+Cupy)}
         \end{axis}
     \end{tikzpicture}
     \caption{The figure presents the weak scalability results for 100K rows per node and the number of columns fixed at 1000 for MPI + Parla based hybrid parallelism and MPI + Cupy based implementations across 16 nodes (64 GPUs) in the Frontera GPU cluster.\label{fig:parla_ws_n1000}
@@ -387,7 +391,7 @@ This section presents, the weak and strong scaling results for distributed memor
                 grid=major,
                 xlabel={number of nodes $\rightarrow$}, ylabel={runtime (s) $\rightarrow$},
                 %legend pos= north west,
-                legend columns=4,
+                legend columns=3,
                 legend style={at={(0.5,-0.35)},anchor=north},
                 bar width=0.3cm,
             ]
@@ -395,12 +399,14 @@ This section presents, the weak and strong scaling results for distributed memor
             \addplot[bar shift=-0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_parla_c100_ss_1600K.dat};
             \addplot[bar shift=-0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_parla_c100_ss_1600K.dat};
             \addplot[bar shift=-0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_parla_c100_ss_1600K.dat};
+            \addplot[bar shift=-0.2cm,fill=black!20]  table[x={nodes},y={overhead}]       {dat/frontera_parla_c100_ss_1600K.dat};
             \resetstackedplotsOne
             \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=red!20]    table[x={nodes},y={qr1_max}]        {dat/frontera_mpi_c100_ss_1600K.dat};
             \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_mpi_c100_ss_1600K.dat};
             \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_mpi_c100_ss_1600K.dat};
             \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_mpi_c100_ss_1600K.dat};
-            \legend{qr1(MPI+Parla), qr2(MPI+Parla), MM(MPI+Parla), MPI\_Comm (MPI+Parla), qr1(MPI+Cupy), qr2(MPI+Cupy), MM(MPI+Cupy), MPI\_Comm(MPI+Cupy)}
+            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=black!20]  table[x={nodes},y={overhead}]       {dat/frontera_mpi_c100_ss_1600K.dat};
+            \legend{qr1(MPI+Parla), qr2(MPI+Parla), MM(MPI+Parla), MPI\_Comm (MPI+Parla), other(MPI+Parla), qr1(MPI+Cupy), qr2(MPI+Cupy), MM(MPI+Cupy), MPI\_Comm(MPI+Cupy),other(MPI+Cupy)}
         \end{axis}
     \end{tikzpicture}
     \caption{The figure presents the strong scalability results for a fixed matrix size of $1.6M \times 100$ for MPI + Parla based hybrid parallelism and MPI + Cupy based implementations across 16 nodes (64 GPUs) in the Frontera GPU cluster.\label{fig:parla_ss_n100}
@@ -421,7 +427,7 @@ This section presents, the weak and strong scaling results for distributed memor
                 grid=major,
                 xlabel={number of nodes $\rightarrow$}, ylabel={runtime (s) $\rightarrow$},
                 %legend pos= north west,
-                legend columns=4,
+                legend columns=3,
                 legend style={at={(0.5,-0.35)},anchor=north},
                 bar width=0.3cm,
             ]
@@ -429,12 +435,14 @@ This section presents, the weak and strong scaling results for distributed memor
             \addplot[bar shift=-0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_parla_c1000_ss_1600K.dat};
             \addplot[bar shift=-0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_parla_c1000_ss_1600K.dat};
             \addplot[bar shift=-0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_parla_c1000_ss_1600K.dat};
+            \addplot[bar shift=-0.2cm,fill=black!20]  table[x={nodes},y={overhead}]       {dat/frontera_parla_c1000_ss_1600K.dat};
             \resetstackedplotsOne
             \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=red!20]    table[x={nodes},y={qr1_max}]        {dat/frontera_mpi_c1000_ss_1600K.dat};
             \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=yellow!20] table[x={nodes},y={qr2_max}]        {dat/frontera_mpi_c1000_ss_1600K.dat};
             \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=cyan!20]   table[x={nodes},y={mm_max}]         {dat/frontera_mpi_c1000_ss_1600K.dat};
             \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=green!20]  table[x={nodes},y={mpi_comm_max}]   {dat/frontera_mpi_c1000_ss_1600K.dat};
-            \legend{qr1(MPI+Parla), qr2(MPI+Parla), MM(MPI+Parla), MPI\_Comm (MPI+Parla), qr1(MPI+Cupy), qr2(MPI+Cupy), MM(MPI+Cupy), MPI\_Comm(MPI+Cupy)}
+            \addplot[postaction={pattern=north east lines},bar shift=0.2cm,fill=black!20]  table[x={nodes},y={overhead}]       {dat/frontera_mpi_c1000_ss_1600K.dat};
+            \legend{qr1(MPI+Parla), qr2(MPI+Parla), MM(MPI+Parla), MPI\_Comm (MPI+Parla), other(MPI+Parla), qr1(MPI+Cupy), qr2(MPI+Cupy), MM(MPI+Cupy), MPI\_Comm(MPI+Cupy),other(MPI+Cupy)}
         \end{axis}
     \end{tikzpicture}
     \caption{The figure presents the strong scalability results for a fixed matrix size of $1.6M \times 1000$ for MPI + Parla based hybrid parallelism and MPI + Cupy based implementations across 16 nodes (64 GPUs) in the Frontera GPU cluster.\label{fig:parla_ss_n100}
