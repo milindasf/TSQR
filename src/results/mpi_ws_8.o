@@ -1,0 +1,62 @@
+/home1/03727/tg830270/Research/TSQR/src
+Tue Jul 20 16:24:17 CDT 2021
+TACC:  Starting up job 3312729 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks  32
+Config: rows=8000 cols=100 iterations=1 warmup=2 check_result=False MODE=MPI+CUDA THREADS=1
+
+iter	total_min	total_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	mpi_comm_min	mpi_comm_max	H2D_min	H2D_max	D2H_min	D2H_max	kernel_gpu_min	kernel_gpu_max
+2	0.027811795939	0.027858714573	0.002008839976	0.002061674837	0.000000742264	0.023337595165	0.000347656198	0.000411515124	0.001169787254	0.001819225959	0.000154918060	0.000199890696	0.000169138890	0.000212303363	0.002000509761	0.002054179087
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3312729 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks  32
+Config: rows=80000 cols=100 iterations=1 warmup=2 check_result=False MODE=MPI+CUDA THREADS=1
+
+iter	total_min	total_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	mpi_comm_min	mpi_comm_max	H2D_min	H2D_max	D2H_min	D2H_max	kernel_gpu_min	kernel_gpu_max
+2	0.032524749171	0.033027322963	0.004526795121	0.004658136982	0.000000729924	0.024872246664	0.000769581180	0.000896763057	0.001354154665	0.002046344802	0.000467677135	0.000586745795	0.000451206695	0.000531708822	0.004343498964	0.004438426811
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3312729 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks  32
+Config: rows=800000 cols=100 iterations=1 warmup=2 check_result=False MODE=MPI+CUDA THREADS=1
+
+iter	total_min	total_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	mpi_comm_min	mpi_comm_max	H2D_min	H2D_max	D2H_min	D2H_max	kernel_gpu_min	kernel_gpu_max
+2	0.064508839045	0.071323285811	0.026510270778	0.027191943955	0.000000793021	0.023449108005	0.009423416108	0.011501173954	0.001504029613	0.002713612746	0.003998627886	0.004734415095	0.006920441985	0.009055223316	0.024759316118	0.025059464155
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3312729 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks  32
+Config: rows=8000 cols=1000 iterations=1 warmup=2 check_result=False MODE=MPI+CUDA THREADS=1
+
+iter	total_min	total_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	mpi_comm_min	mpi_comm_max	H2D_min	H2D_max	D2H_min	D2H_max	kernel_gpu_min	kernel_gpu_max
+2	1.618137094658	1.619299719576	0.009801122826	0.010263351025	0.000000748085	1.545153460000	0.001383773051	0.001766526140	0.053533830680	0.061090257950	0.000853219070	0.001112683676	0.000623985659	0.000817218795	0.009660289623	0.010174133815
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3312729 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks  32
+Config: rows=80000 cols=1000 iterations=1 warmup=2 check_result=False MODE=MPI+CUDA THREADS=1
+
+iter	total_min	total_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	mpi_comm_min	mpi_comm_max	H2D_min	H2D_max	D2H_min	D2H_max	kernel_gpu_min	kernel_gpu_max
+2	7.117226121947	7.122928470373	0.072243178729	0.073627144098	0.000000779983	6.799430049025	0.024749283679	0.028862759005	0.152954716235	0.216782562900	0.005530437455	0.007033524103	0.006281668786	0.009825962596	0.084872673266	0.085617785342
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3312729 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks  32
+Config: rows=800000 cols=1000 iterations=1 warmup=2 check_result=False MODE=MPI+CUDA THREADS=1
+
+iter	total_min	total_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	mpi_comm_min	mpi_comm_max	H2D_min	H2D_max	D2H_min	D2H_max	kernel_gpu_min	kernel_gpu_max
+2	7.640761045739	7.717425652780	0.568753045052	0.583916172851	0.000000853091	6.618281636853	0.225212486926	0.238317223033	0.148897036910	0.215963320341	0.042538045906	0.048015277833	0.065602124203	0.071099017980	0.686310895020	0.703585847747
+TACC:  Shutdown complete. Exiting. 

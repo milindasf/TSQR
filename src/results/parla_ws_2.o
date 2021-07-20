@@ -1,0 +1,65 @@
+/home1/03727/tg830270/Research/TSQR/src
+Tue Jul 20 16:15:19 CDT 2021
+TACC:  Starting up job 3312722 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks:  2
+Config: rows=2000 cols=100 block_size=500 iterations=1 warmup=2 threads=4 ngpus=4 placement=gpu check_result=False csv=False
+iter	total_min	total_max	mpi_comm_min	mpi_comm_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	h2d_min	h2d_max	d2h_min	d2h_max	qr_cpu_min	qr_cpu_max	qr_gpu_min	qr_gpu_max	mm_cpu_min	mm_cpu_max	mm_gpu_min	mm_gpu_max
+2	0.036619990133	0.036707160063	0.000486548059	0.000497972127	0.022365883924	0.028006799985	0.000472133048	0.002376656979	0.002540618181	0.003097378183	0.001405825838	0.001567382831	0.000646395143	0.000817903318	0.000000000000	0.000000000000	0.004842379130	0.007349283434	0.000000000000	0.000000000000	0.000243338756	0.000271562021
+%**********************************************************************************************%
+
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3312722 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks:  2
+Config: rows=20000 cols=100 block_size=5000 iterations=1 warmup=2 threads=4 ngpus=4 placement=gpu check_result=False csv=False
+iter	total_min	total_max	mpi_comm_min	mpi_comm_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	h2d_min	h2d_max	d2h_min	d2h_max	qr_cpu_min	qr_cpu_max	qr_gpu_min	qr_gpu_max	mm_cpu_min	mm_cpu_max	mm_gpu_min	mm_gpu_max
+2	0.048849421088	0.049481121823	0.001191859599	0.001204119064	0.029023254290	0.035544412211	0.000511192251	0.002516507171	0.006472682115	0.007035955787	0.002619228326	0.003232799470	0.002178960014	0.002458421979	0.000000000000	0.000000000000	0.007663863245	0.010742354207	0.000000000000	0.000000000000	0.000633935910	0.000635436270
+%**********************************************************************************************%
+
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3312722 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks:  2
+Config: rows=200000 cols=100 block_size=50000 iterations=1 warmup=2 threads=4 ngpus=4 placement=gpu check_result=False csv=False
+iter	total_min	total_max	mpi_comm_min	mpi_comm_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	h2d_min	h2d_max	d2h_min	d2h_max	qr_cpu_min	qr_cpu_max	qr_gpu_min	qr_gpu_max	mm_cpu_min	mm_cpu_max	mm_gpu_min	mm_gpu_max
+2	0.221009293571	0.221676541958	0.000660794787	0.000674646348	0.107934086118	0.139995084144	0.000650362112	0.002405880950	0.062577452045	0.073995119892	0.020239436068	0.022749742959	0.037360915914	0.044310648926	0.000000000000	0.000000000000	0.040985388216	0.076165729202	0.000000000000	0.000000000000	0.005443493836	0.007284314837
+%**********************************************************************************************%
+
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3312722 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks:  2
+Config: rows=2000 cols=1000 block_size=500 iterations=1 warmup=2 threads=4 ngpus=4 placement=gpu check_result=False csv=False
+TACC:  MPI job exited with code: 1 
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3312722 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks:  2
+Config: rows=20000 cols=1000 block_size=5000 iterations=1 warmup=2 threads=4 ngpus=4 placement=gpu check_result=False csv=False
+iter	total_min	total_max	mpi_comm_min	mpi_comm_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	h2d_min	h2d_max	d2h_min	d2h_max	qr_cpu_min	qr_cpu_max	qr_gpu_min	qr_gpu_max	mm_cpu_min	mm_cpu_max	mm_gpu_min	mm_gpu_max
+2	0.679115788080	0.679394348990	0.023783187382	0.026803203393	0.174049862195	0.187939483207	0.000651990063	0.347271507140	0.088800858241	0.115558039863	0.020638587885	0.023762727156	0.042018746957	0.042393466923	0.000000000000	0.000000000000	0.114080623724	0.125142470002	0.000000000000	0.000000000000	0.034872265067	0.052045773249
+%**********************************************************************************************%
+
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3312722 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks:  2
+Config: rows=200000 cols=1000 block_size=50000 iterations=1 warmup=2 threads=4 ngpus=4 placement=gpu check_result=False csv=False
+iter	total_min	total_max	mpi_comm_min	mpi_comm_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	h2d_min	h2d_max	d2h_min	d2h_max	qr_cpu_min	qr_cpu_max	qr_gpu_min	qr_gpu_max	mm_cpu_min	mm_cpu_max	mm_gpu_min	mm_gpu_max
+2	3.098384042270	3.137656951789	0.026231251657	0.029378785752	1.594068555161	1.595374369994	0.000650350936	0.374909732956	0.823298421688	1.090138800908	0.180498729460	0.186690384988	0.299888495356	0.409750538412	0.000000000000	0.000000000000	1.065034627914	1.079528650269	0.000000000000	0.000000000000	0.303853251040	0.554785674904
+%**********************************************************************************************%
+
+TACC:  Shutdown complete. Exiting. 

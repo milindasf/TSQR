@@ -1,0 +1,68 @@
+/home1/03727/tg830270/Research/TSQR/src
+Tue Jul 20 16:18:33 CDT 2021
+TACC:  Starting up job 3312724 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks:  8
+Config: rows=8000 cols=100 block_size=2000 iterations=1 warmup=2 threads=4 ngpus=4 placement=gpu check_result=False csv=False
+iter	total_min	total_max	mpi_comm_min	mpi_comm_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	h2d_min	h2d_max	d2h_min	d2h_max	qr_cpu_min	qr_cpu_max	qr_gpu_min	qr_gpu_max	mm_cpu_min	mm_cpu_max	mm_gpu_min	mm_gpu_max
+2	0.024361344986	0.024495472666	0.001278731972	0.001406597905	0.008604423143	0.012637446169	0.000458599068	0.003906759899	0.001704026945	0.003500620835	0.000462251250	0.000720984302	0.000483725686	0.001115020365	0.000000000000	0.000000000000	0.002336744219	0.005247222725	0.000000000000	0.000000000000	0.000186338089	0.000672647264
+%**********************************************************************************************%
+
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3312724 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks:  8
+Config: rows=80000 cols=100 block_size=20000 iterations=1 warmup=2 threads=4 ngpus=4 placement=gpu check_result=False csv=False
+iter	total_min	total_max	mpi_comm_min	mpi_comm_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	h2d_min	h2d_max	d2h_min	d2h_max	qr_cpu_min	qr_cpu_max	qr_gpu_min	qr_gpu_max	mm_cpu_min	mm_cpu_max	mm_gpu_min	mm_gpu_max
+2	0.046558673028	0.047348453198	0.001387505792	0.001540975180	0.020414230879	0.027030322235	0.000508902129	0.003747352865	0.006802069955	0.011327194050	0.002883001696	0.005155877210	0.001724639907	0.006970434915	0.000000000000	0.000000000000	0.009966544807	0.013690079097	0.000000000000	0.000000000000	0.001049282961	0.002004684880
+%**********************************************************************************************%
+
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3312724 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks:  8
+Config: rows=800000 cols=100 block_size=200000 iterations=1 warmup=2 threads=4 ngpus=4 placement=gpu check_result=False csv=False
+iter	total_min	total_max	mpi_comm_min	mpi_comm_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	h2d_min	h2d_max	d2h_min	d2h_max	qr_cpu_min	qr_cpu_max	qr_gpu_min	qr_gpu_max	mm_cpu_min	mm_cpu_max	mm_gpu_min	mm_gpu_max
+2	0.289616732858	0.295956294052	0.001562981401	0.001685956493	0.145649207057	0.177225358784	0.000510183163	0.004103338346	0.081032051006	0.101992347743	0.031969478820	0.035885664634	0.051243256079	0.059688381385	0.000000000000	0.000000000000	0.068405983970	0.075294481125	0.000000000000	0.000000000000	0.008949709125	0.010076399893
+%**********************************************************************************************%
+
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3312724 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks:  8
+Config: rows=8000 cols=1000 block_size=2000 iterations=1 warmup=2 threads=4 ngpus=4 placement=gpu check_result=False csv=False
+iter	total_min	total_max	mpi_comm_min	mpi_comm_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	h2d_min	h2d_max	d2h_min	d2h_max	qr_cpu_min	qr_cpu_max	qr_gpu_min	qr_gpu_max	mm_cpu_min	mm_cpu_max	mm_gpu_min	mm_gpu_max
+2	0.893372972030	0.893868690822	0.050793790724	0.059522875119	0.045186846983	0.063410202973	0.000599503983	0.742922976613	0.015381942037	0.023289727978	0.005548272748	0.012157682795	0.002978099044	0.005287666339	0.000000000000	0.000000000000	0.032251373399	0.043335845228	0.000000000000	0.000000000000	0.007767019793	0.008245521225
+%**********************************************************************************************%
+
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3312724 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks:  8
+Config: rows=80000 cols=1000 block_size=20000 iterations=1 warmup=2 threads=4 ngpus=4 placement=gpu check_result=False csv=False
+iter	total_min	total_max	mpi_comm_min	mpi_comm_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	h2d_min	h2d_max	d2h_min	d2h_max	qr_cpu_min	qr_cpu_max	qr_gpu_min	qr_gpu_max	mm_cpu_min	mm_cpu_max	mm_gpu_min	mm_gpu_max
+2	1.321459537372	1.327522598673	0.050161324907	0.060765710659	0.285238838289	0.340444918256	0.000582354143	0.750798251946	0.146469040075	0.169809723739	0.034567658789	0.042493488174	0.052177471109	0.067101350054	0.000000000000	0.000000000000	0.189330352005	0.230254804250	0.000000000000	0.000000000000	0.066863003187	0.069721150212
+%**********************************************************************************************%
+
+TACC:  Shutdown complete. Exiting. 
+TACC:  Starting up job 3312724 
+TACC:  Starting parallel tasks... 
+%**********************************************************************************************%
+
+number of mpi tasks:  8
+Config: rows=800000 cols=1000 block_size=200000 iterations=1 warmup=2 threads=4 ngpus=4 placement=gpu check_result=False csv=False
+iter	total_min	total_max	mpi_comm_min	mpi_comm_max	qr1_min	qr1_max	qr2_min	qr2_max	mm_min	mm_max	h2d_min	h2d_max	d2h_min	d2h_max	qr_cpu_min	qr_cpu_max	qr_gpu_min	qr_gpu_max	mm_cpu_min	mm_cpu_max	mm_gpu_min	mm_gpu_max
+2	5.265351882670	5.335906641092	0.051735192770	0.060893346090	2.763022092171	3.007938526105	0.000566655770	0.734664485324	1.266735939775	1.517029169947	0.326794630848	0.377701114863	0.516461444553	0.595859675203	0.000000000000	0.000000000000	1.994101530872	2.054366564844	0.000000000000	0.000000000000	0.559088972863	0.584017252084
+%**********************************************************************************************%
+
+TACC:  Shutdown complete. Exiting. 

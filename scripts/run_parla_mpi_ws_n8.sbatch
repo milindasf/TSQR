@@ -35,44 +35,23 @@ ROWS=800000
 ibrun python3 tsqr_parla_mpi.py -r $ROWS -c $COLS -p $PLACEMENT -t $THREADS -i $I -w $W 
 
 
-#ROWS=1000000
-#ibrun python3 tsqr_parla_mpi.py -r $ROWS -c $COLS -p $PLACEMENT -t $THREADS -i $I -w $W
+
+COLS=1000
+PLACEMENT=gpu
+THREADS=4
+I=1
+W=2
+
+export OMP_NUM_THREADS=4
+
+ROWS=8000
+ibrun python3 tsqr_parla_mpi.py -r $ROWS -c $COLS -p $PLACEMENT -t $THREADS -i $I -w $W
+
+ROWS=80000
+ibrun python3 tsqr_parla_mpi.py -r $ROWS -c $COLS -p $PLACEMENT -t $THREADS -i $I -w $W
 
 
-#ROWS=10000000
-#ibrun python3 tsqr_parla_mpi.py -r $ROWS -c $COLS -p $PLACEMENT -t $THREADS -i $I -w $W
+ROWS=800000
+ibrun python3 tsqr_parla_mpi.py -r $ROWS -c $COLS -p $PLACEMENT -t $THREADS -i $I -w $W 
 
 
-
-
-
-
-#PLACEMENT=SM+CUDA
-#ROWS=1000
-#python3 tsqr.py -r $ROWS -c $COLS -p $PLACEMENT -t $THREADS -i $I -w $W
-
-#ROWS=10000
-#python3 tsqr.py -r $ROWS -c $COLS -p $PLACEMENT -t $THREADS -i $I -w $W
-
-#ROWS=100000
-#python3 tsqr.py -r $ROWS -c $COLS -p $PLACEMENT -t $THREADS -i $I -w $W
-
-#ROWS=1000000
-#python3 tsqr.py -r $ROWS -c $COLS -p $PLACEMENT -t $THREADS -i $I -w $W
-
-#PLACEMENT=MPI+CUDA
-#THREADS=1
-#export OMP_NUM_THREADS=1
-
-#ROWS=1000
-#ibrun -np 4 python3 tsqr.py -r $ROWS -c $COLS -p $PLACEMENT -t $THREADS -i $I -w $W
-
-#ROWS=10000
-#ibrun -np 4 python3 tsqr.py -r $ROWS -c $COLS -p $PLACEMENT -t $THREADS -i $I -w $W
-
-#ROWS=100000
-#ibrun -np 4 python3 tsqr.py -r $ROWS -c $COLS -p $PLACEMENT -t $THREADS -i $I -w $W
-
-
-#ROWS=1000000
-#ibrun -np 4 python3 tsqr.py -r $ROWS -c $COLS -p $PLACEMENT -t $THREADS -i $I -w $W
