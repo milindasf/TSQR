@@ -684,21 +684,21 @@ def tsqr_mpi_gpu_v3(Ar, comm):
     # gather R1 to rank 0 (root) processor
     t_mpi_comm.start()
     R1g = gather_mat(R1,comm)
-    R1g = comm.bcast(R1g)
     t_mpi_comm.stop()
     
+    Q2 = None 
+    R  = None
     t_t2.start()
     #[Q2,R,ts]=block_gpu_qr(R1g,dev_id,loc={'A':'H','Q':'D','R':'H'})
-    [Q2,R] = np.linalg.qr(R1g,mode='reduced')
+    if(not rank):
+        [Q2,R] = np.linalg.qr(R1g,mode='reduced')
     t_t2.stop()
 
-    #t_h2d += ts[0]
-    #t_kernel_gpu += ts[1]
-    #t_d2h += ts[2]
+    t_mpi_comm.start()
+    R=comm.bcast(R)
+    Q2r= scatter_mat(Q2,comm)
+    t_mpi_comm.stop()
 
-    [rb,re] = row_partition_bounds(R1g.shape[0],rank,npes)
-    Q2r = Q2[rb:re,:]
-    
     t_t3.start()
     [Q,ts]=block_gpu_matmult(Q1,Q2r,dev_id,loc={'A':'D','B':'H','C':'H'})
     t_t3.stop()
@@ -786,7 +786,7 @@ def tsqr_driver(comm):
 
             t_overall = profile_t("total")
             t_overall.start()
-            [Qr,Rr,ts] = tsqr_mpi_gpu_v1(Ar,comm)
+            [Qr,Rr,ts] = tsqr_mpi_gpu_v3(Ar,comm)
             t_overall.stop()
             
             if ((iter >= WARMUP)):
@@ -899,6 +899,7 @@ if __name__ == "__main__":
 
     if(not rank):
         print('%**********************************************************************************************%\n')
+        print("number of mpi tasks ",npes)
         print('Config: rows=', NROWS, ' cols=', NCOLS, ' iterations=', ITERS, ' warmup=', WARMUP, ' check_result=', CHECK_RESULT,' MODE=', MODE,' THREADS=', NTHREADS, sep='', end='\n\n')
 
     comm.barrier()
