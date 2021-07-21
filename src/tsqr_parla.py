@@ -134,10 +134,10 @@ async def tsqr_blocked(A, block_size):
         if PLACEMENT_STRING == 'gpu' or PLACEMENT_STRING == 'both':
             T1_MEMORY = int(4.2*A_blocked[i:i+1].nbytes) # Estimate based on empirical evidence
 
-        @spawn(taskid=T1[i], placement=PLACEMENT, memory=T1_MEMORY, vcus=ACUS)
+        dev_id = i % NGPUS
+        @spawn(taskid=T1[i], placement=PLACEMENT[dev_id], memory=T1_MEMORY, vcus=ACUS)
         def t1():
             #print("t1[", i, "] start on ", get_current_devices(), sep='', flush=True)
-
             # Copy the data to the processor
             t_h2d[i].start()
             A_block_local = A_blocked[i:i+1]
@@ -186,7 +186,8 @@ async def tsqr_blocked(A, block_size):
         if PLACEMENT_STRING == 'gpu' or PLACEMENT_STRING == 'both':
             T3_MEMORY = 4*Q1_blocked[i].nbytes # # This is a guess
 
-        @spawn(taskid=T3[i], dependencies=[T1[i], t2], placement=PLACEMENT, memory=T3_MEMORY, vcus=ACUS)
+        dev_id = i % NGPUS
+        @spawn(taskid=T3[i], dependencies=[T1[i], t2], placement=PLACEMENT[dev_id], memory=T3_MEMORY, vcus=ACUS)
         def t3():
             #print("t3[", i, "] start on ", get_current_devices(), sep='', flush=True)
 
@@ -200,83 +201,6 @@ async def tsqr_blocked(A, block_size):
             # Run the kernel. (Data is copied back within this call; timing annotations are added there)
             Q[Q_lower:Q_upper] = matmul_block(Q1_block_local, Q2_block_local, i)
             #print("t3[", i, "] end on ", get_current_devices(), sep='', flush=True)
-
-    await T3
-    t3_total.stop()
-    return Q, R
-
-# !!! Don't use this. Force all the tasks to GPU. (Not Used)
-async def tsqr_blocked_puregpu(A, block_size):
-    Q1 = [None] * NGPUS
-    R1 = PartitionedTensor([None] * NGPUS) # CAVEAT: PartitionedTensor with None holes can be fragile! Be cautious!
-
-    # Create tasks to perform qr factorization on each block and store them in lists
-    t1_total.start()
-    T1 = TaskSpace()
-    for i in range(NGPUS):
-        @spawn(taskid=T1[i], placement=A.base[i]) # NB: A[i] dumbly moves the block here!
-        def t1():
-            #print("t1[", i, "] start on ", get_current_devices(), sep='', flush=True)
-            t_qr_gpu[i].start()
-            Q1[i], R1[i] = cp.linalg.qr(A[i])
-            cp.cuda.get_current_stream().synchronize()
-            t_qr_gpu[i].stop()
-            R1[i] = R1[i].flatten()
-            A[i] = None # Free up memory
-            #print("t1[", i, "] end on ", get_current_devices(),  sep='', flush=True)
-
-    await t1
-    t1_total.stop()
-
-    # Perform intermediate qr factorization on R1 to get Q2 and final R
-    t2_total.start()
-    @spawn(dependencies=T1, placement=gpu)
-    def t2():
-        #print("\nt2 start", flush=True)
-        # Gather to this device
-        R1_reduced = np.empty(shape=(0, NCOLS))
-        for dev in range(NGPUS):
-            next = R1[dev]
-            next = next.reshape(NCOLS, NCOLS)
-            R1_reduced = cp.vstack((R1_reduced, next))
-            R1[dev] = None # Free up memory
-
-        cp.cuda.get_current_stream().synchronize()
-        # R here is the final R result
-        Q2, R = cp.linalg.qr(R1_reduced)
-        cp.cuda.get_current_stream().synchronize()
-        Q2 = Q2.flatten()
-        return Q2, R
-
-    Q2, R = await t2
-    t2_total.stop()
-    #print("t2 end\n", flush=True)
-
-    mapper = LDeviceSequenceBlocked(NGPUS, placement=Q2)
-    Q2p = mapper.partition_tensor(Q2)
-    Q = [None] * NGPUS
-    
-    t3_total.start()
-    # Create tasks to perform Q1 @ Q2 matrix multiplication by block
-    T3 = TaskSpace()
-    for i in range(NGPUS):
-        @spawn(taskid=T3[i], dependencies=[T1[i], t2], placement=Q1[i])
-        def t3():
-            #print("t3[", i, "] start on ", get_current_devices(), sep='', flush=True)
-            # Copy the data to the processor
-            # Q1 and Q2 must have an equal number of blocks, where Q1 blocks' ncols = Q2 blocks' nrows
-            # Q2 is currently an (ncols * nblocks) x ncols matrix. Need nblocks of ncols rows each
-            t_h2d[i].start()
-            Q2_local = Q2p[i]
-            cp.cuda.get_current_stream().synchronize()
-            Q2_local = Q2_local.reshape(NCOLS, NCOLS)
-            t_h2d[i].stop()
-            
-            # Run the kernel. (Data is copied back within this call; timing annotations are added there)
-            t_mm_gpu[i].start()
-            Q[i] = cp.matmul(Q1[i], Q2_local)
-            cp.cuda.get_current_stream().synchronize()
-            t_mm_gpu[i].stop()
 
     await T3
     t3_total.stop()
@@ -311,26 +235,7 @@ def main():
             for tt in ts:
                 for t in tt:
                     t.reset()
-            # if PLACEMENT_STRING == 'puregpu':
-            #         if (NROWS % NGPUS != 0):
-            #             raise ValueError("Pure GPU version requires NROWS %% NGPUS == 0 (currently %i %% %i)" % (NROWS, NGPUS))
-            #         # Partition matrix on GPUs
-            #         mapper = LDeviceSequenceBlocked(NGPUS, placement=[gpu(dev) for dev in range(NGPUS)])
-            #         A_dev = mapper.partition_tensor(A)
-                    
-            #         tot_start = time()
-            #         Q_dev, R_dev = await tsqr_blocked_puregpu(A_dev, BLOCK_SIZE)
-            #         tot_end = time()
-
-            #         # Copy the data back
-            #         if CHECK_RESULT:
-            #             Q = np.empty(shape=(0, NCOLS))
-            #             for dev in range(NGPUS):
-            #                 with cp.cuda.Device(dev):
-            #                     Q = np.vstack((Q, cp.asnumpy(Q_dev[dev])))
-
-            #             R = cp.asnumpy(R_dev)
-            # else:
+            
             t_overall = profile_t("total")
             t_overall.start()
             Q, R = await tsqr_blocked(A, BLOCK_SIZE)
