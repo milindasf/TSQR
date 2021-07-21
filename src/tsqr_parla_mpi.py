@@ -190,7 +190,7 @@ def qr_block_gpu(block, taskid):
     
     # Transfer the data
     t_d2h[taskid].start()
-    cpu_Q = cp.asnumpy(gpu_Q)
+    cpu_Q = gpu_Q #cp.asnumpy(gpu_Q)
     cpu_R = cp.asnumpy(gpu_R)
     cp.cuda.get_current_stream().synchronize()
     t_d2h[taskid].stop()
@@ -223,110 +223,6 @@ def matmul_block_gpu(block_1, block_2, taskid):
 
     return cpu_Q
 
-async def tsqr_blocked(A, block_size):
-    [nrows, ncols] = A.shape
-    # Check for block_size > ncols
-    assert ncols <= block_size, "Block size must be greater than or equal to the number of columns in the input matrix"
-
-    # Calculate the number of blocks
-    nblocks = (nrows + block_size - 1) // block_size # ceiling division
-    mapper = LDeviceSequenceBlocked(nblocks, placement=A)
-    A_blocked = mapper.partition_tensor(A) # Partition A into blocks
-    
-    # Initialize and partition empty array to store blocks (same partitioning scheme, share the mapper)
-    Q1_blocked = mapper.partition_tensor(np.empty_like(A))
-    R1 = np.empty([nblocks * ncols, ncols]) # Concatenated view
-    # Q2 is allocated in t2
-    Q = np.empty([nrows, ncols]) # Concatenated view
-
-    # Create tasks to perform qr factorization on each block and store them in lists
-    #t1_tot_start = time()
-    t1_total.start()
-    T1 = TaskSpace()
-    for i in range(nblocks):
-        # Block view to store Q1 not needed since it's not contiguous
-
-        # Get block view to store R1
-        R1_lower = i * ncols
-        R1_upper = (i + 1) * ncols
-
-        T1_MEMORY = None
-        if PLACEMENT_STRING == 'gpu' or PLACEMENT_STRING == 'both':
-            T1_MEMORY = int(4.2*A_blocked[i:i+1].nbytes) # Estimate based on empirical evidence
-
-        dev_id = i % NGPUS
-        @spawn(taskid=T1[i], placement=PLACEMENT[dev_id], memory=T1_MEMORY, vcus=ACUS)
-        def t1():
-            #print("t1[", i, "] start on ", get_current_devices(), sep='', flush=True)
-
-            # Copy the data to the processor
-            t_h2d[i].start()
-            A_block_local = A_blocked[i:i+1]
-            cp.cuda.get_current_stream().synchronize()
-            t_h2d[i].stop()
-            
-            # Run the kernel. (Data is copied back within this call; timing annotations are added there)
-            Q1_blocked[i], R1[R1_lower:R1_upper] = qr_block(A_block_local, i)
-            #print("t1[", i, "] end on ", get_current_devices(),  sep='', flush=True)
-
-    await t1
-    t1_total.stop()
-    #t1_tot_end = time()
-    #perf_stats.t1_tot = t1_tot_end - t1_tot_start
-
-    # Perform intermediate qr factorization on R1 to get Q2 and final R
-    t2_total.start()
-    @spawn(dependencies=T1, placement=cpu)
-    def t2():
-        #print("\nt2 start", flush=True)
-
-        # R here is the final R result
-        # This step could be done recursively, but for small column counts that's not necessary
-        Q2, R = np.linalg.qr(R1)
-
-        # Q1 and Q2 must have an equal number of blocks, where Q1 blocks' ncols = Q2 blocks' nrows
-        # Q2 is currently an (ncols * nblocks) x ncols matrix. Need nblocks of ncols rows each
-        return Q2, R
-
-    Q2, R = await t2
-    t2_total.stop()
-    
-    # Partition Q2 (same partitioning scheme, share the mapper)
-    Q2_blocked = mapper.partition_tensor(Q2)
-    t3_total.start()
-    # Create tasks to perform Q1 @ Q2 matrix multiplication by block
-    T3 = TaskSpace()
-    for i in range(nblocks):
-        # Q1 is already in blocks
-
-        # Get block view to store Q
-        Q_lower = i * block_size # first row in block, inclusive
-        Q_upper = (i + 1) * block_size # last row in block, exclusive
-
-        T3_MEMORY = None
-        if PLACEMENT_STRING == 'gpu' or PLACEMENT_STRING == 'both':
-            T3_MEMORY = 4*Q1_blocked[i].nbytes # # This is a guess
-
-        dev_id = i % NGPUS
-        @spawn(taskid=T3[i], dependencies=[T1[i], t2], placement=PLACEMENT[dev_id], memory=T3_MEMORY, vcus=ACUS)
-        def t3():
-            #print("t3[", i, "] start on ", get_current_devices(), sep='', flush=True)
-
-            # Copy the data to the processor
-            t_h2d[i].start()
-            Q1_block_local = Q1_blocked[i]
-            Q2_block_local = Q2_blocked[i:i+1]
-            cp.cuda.get_current_stream().synchronize()
-            t_h2d[i].stop()
-            
-            # Run the kernel. (Data is copied back within this call; timing annotations are added there)
-            Q[Q_lower:Q_upper] = matmul_block(Q1_block_local, Q2_block_local, i)
-            #print("t3[", i, "] end on ", get_current_devices(), sep='', flush=True)
-
-    await T3
-    t3_total.stop()
-    return Q, R
-
 async def tsqr_blocked_mpi(Ar,comm,block_size):
 
     rank = comm.Get_rank()
@@ -342,7 +238,8 @@ async def tsqr_blocked_mpi(Ar,comm,block_size):
     A_blocked = mapper.partition_tensor(Ar) # Partition A into blocks
     
     # Initialize and partition empty array to store blocks (same partitioning scheme, share the mapper)
-    Q1_blocked = mapper.partition_tensor(np.empty_like(Ar))
+    # milinda : no need the partition buffer we can keep the Q1 in the GPU
+    Q1_blocked = [None]*nblocks #mapper.partition_tensor(np.empty_like(A))
     R1 = np.empty([nblocks * ncols, ncols]) # Concatenated view
     # Q2 is allocated in t2
     Q = np.empty([nrows, ncols]) # Concatenated view
@@ -359,8 +256,9 @@ async def tsqr_blocked_mpi(Ar,comm,block_size):
         R1_upper = (i + 1) * ncols
 
         T1_MEMORY = None
-        if PLACEMENT_STRING == 'gpu' or PLACEMENT_STRING == 'both':
-            T1_MEMORY = int(4.2*A_blocked[i:i+1].nbytes) # Estimate based on empirical evidence
+        ###@todo: Parla bug: refering this outside makes the array copy to the device. 
+        # if PLACEMENT_STRING == 'gpu' or PLACEMENT_STRING == 'both':
+        #     T1_MEMORY = int(4.2*A_blocked[i:i+1].nbytes) # Estimate based on empirical evidence
 
         dev_id = i % NGPUS
         @spawn(taskid=T1[i], placement=PLACEMENT[dev_id], memory=T1_MEMORY, vcus=ACUS)
@@ -424,8 +322,9 @@ async def tsqr_blocked_mpi(Ar,comm,block_size):
         Q_upper = (i + 1) * block_size # last row in block, exclusive
 
         T3_MEMORY = None
-        if PLACEMENT_STRING == 'gpu' or PLACEMENT_STRING == 'both':
-            T3_MEMORY = 4*Q1_blocked[i].nbytes # # This is a guess
+        ###@todo: Parla bug: refering this outside makes the array copy to the device. 
+        # if PLACEMENT_STRING == 'gpu' or PLACEMENT_STRING == 'both':
+        #     T3_MEMORY = 4*Q1_blocked[i].nbytes # # This is a guess
 
         dev_id = i % NGPUS
         @spawn(taskid=T3[i], dependencies=[T1[i], t2], placement=PLACEMENT[dev_id], memory=T3_MEMORY, vcus=ACUS)
@@ -617,7 +516,7 @@ if __name__ == "__main__":
             print('puregpu version chosen: block size automatically set to NROWS / NGPUS\n')
 
     with Parla():
-        os.environ['OMP_NUM_THREADS'] = NTHREADS
+        #os.environ['OMP_NUM_THREADS'] = NTHREADS
         main()
 
     if(not rank):

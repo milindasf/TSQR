@@ -5,6 +5,7 @@ import numpy as np
 import cupy as cp
 from time import perf_counter as time
 import os
+import logging
 
 from parla import Parla
 from parla.cpu import cpu
@@ -70,7 +71,8 @@ def qr_block_gpu(block, taskid):
     
     # Transfer the data
     t_d2h[taskid].start()
-    cpu_Q = cp.asnumpy(gpu_Q)
+    #cpu_Q = cp.asnumpy(gpu_Q)
+    cpu_Q = gpu_Q
     cpu_R = cp.asnumpy(gpu_R)
     cp.cuda.get_current_stream().synchronize()
     t_d2h[taskid].stop()
@@ -114,7 +116,8 @@ async def tsqr_blocked(A, block_size):
     A_blocked = mapper.partition_tensor(A) # Partition A into blocks
     
     # Initialize and partition empty array to store blocks (same partitioning scheme, share the mapper)
-    Q1_blocked = mapper.partition_tensor(np.empty_like(A))
+    # milinda : no need the partition buffer we can keep the Q1 in the GPU
+    Q1_blocked = [None]*nblocks #mapper.partition_tensor(np.empty_like(A))
     R1 = np.empty([nblocks * ncols, ncols]) # Concatenated view
     # Q2 is allocated in t2
     Q = np.empty([nrows, ncols]) # Concatenated view
@@ -131,8 +134,8 @@ async def tsqr_blocked(A, block_size):
         R1_upper = (i + 1) * ncols
 
         T1_MEMORY = None
-        if PLACEMENT_STRING == 'gpu' or PLACEMENT_STRING == 'both':
-            T1_MEMORY = int(4.2*A_blocked[i:i+1].nbytes) # Estimate based on empirical evidence
+        # if PLACEMENT_STRING == 'gpu' or PLACEMENT_STRING == 'both':
+        #     T1_MEMORY = int(4.2*A_blocked[i:i+1].nbytes) # Estimate based on empirical evidence
 
         dev_id = i % NGPUS
         @spawn(taskid=T1[i], placement=PLACEMENT[dev_id], memory=T1_MEMORY, vcus=ACUS)
@@ -183,8 +186,9 @@ async def tsqr_blocked(A, block_size):
         Q_upper = (i + 1) * block_size # last row in block, exclusive
 
         T3_MEMORY = None
-        if PLACEMENT_STRING == 'gpu' or PLACEMENT_STRING == 'both':
-            T3_MEMORY = 4*Q1_blocked[i].nbytes # # This is a guess
+        ###@todo: Parla bug: refering this outside makes the array copy to the device. 
+        # if PLACEMENT_STRING == 'gpu' or PLACEMENT_STRING == 'both':
+        #     T3_MEMORY = 4*Q1_blocked[i].nbytes # # This is a guess
 
         dev_id = i % NGPUS
         @spawn(taskid=T3[i], dependencies=[T1[i], t2], placement=PLACEMENT[dev_id], memory=T3_MEMORY, vcus=ACUS)
@@ -291,7 +295,8 @@ if __name__ == "__main__":
     parser.add_argument("--csv", help="Prints stats in csv format", action="store_true")
 
     args = parser.parse_args()
-
+    # uncomment to enable logging. 
+    #logging.basicConfig(filename='tsqr_parla_sm.log', level=logging.DEBUG)
     # Set global config variables
     NROWS = args.rows
     NCOLS = args.cols
@@ -342,7 +347,7 @@ if __name__ == "__main__":
         print('puregpu version chosen: block size automatically set to NROWS / NGPUS\n')
 
     with Parla():
-        os.environ['OMP_NUM_THREADS'] = NTHREADS
+        #os.environ['OMP_NUM_THREADS'] = NTHREADS
         main()
 
     print('%**********************************************************************************************%\n')

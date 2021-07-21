@@ -441,6 +441,7 @@ def tsqr_shared_mem_gpu_v1(A,num_threads):
 
 def tsqr_shared_mem_gpu_v2(A,num_threads):
 
+    nrows,ncols = A.shape
     A_blocked = shared_mem_block_part(A,num_threads)
     loc={'A':'H','Q':'D','R':'H'}
 
@@ -458,30 +459,30 @@ def tsqr_shared_mem_gpu_v2(A,num_threads):
         for t_id in range(num_threads):
             result.append(executor.submit(block_gpu_qr,A_blocked[t_id],t_id,loc))
 
-    
-    Q1_GPU  = list()
-    R1_CPU  = list()
-    r1_time = list()
+    Q       = np.empty([nrows, ncols])              # Concatenated view like A. 
+    Q1_GPU  = [None] * num_threads
+    R1_CPU  = np.empty([num_threads*ncols , ncols]) # Concatenated view
+    r1_time = [None] * num_threads
 
-    for m in result:
-        #print(m.result())
-        Q1_GPU.append (m.result()[0])
-        R1_CPU.append (m.result()[1])
-        r1_time.append(m.result()[2])
+    for t_id in range(num_threads):
+        Q1_GPU[t_id] = result[t_id].result()[0]
+        [rb,re] = row_partition_bounds(num_threads*ncols,t_id,num_threads)
+        R1_CPU[rb:re,:] = result[t_id].result()[1]
+        r1_time[t_id] = result[t_id].result()[2]
+    
     t_t1_total[0].stop()
     
-    R1=shared_mem_unblock(R1_CPU)
     loc={'A':'H','Q':'D','R':'H'}
     result =list()
 
     t_t2_total[0].start()
-    [Q2,R] = np.linalg.qr(R1,mode='reduced')
+    [Q2,R] = np.linalg.qr(R1_CPU,mode='reduced')
     t_t2_total[0].stop()
 
     #print(Q2_GPU)
     #print(R)
     loc={'A':'D','B':'H','C':'H'}
-    [rows,cols] = R1.shape
+    [rows,cols] = R1_CPU.shape
     result=list()
     t_t3_total[0].start()
     with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
@@ -490,11 +491,11 @@ def tsqr_shared_mem_gpu_v2(A,num_threads):
             [rb,re]=row_partition_bounds(rows,t_id,num_threads)
             result.append(executor.submit(block_gpu_matmult,Q1_GPU[t_id],Q2[rb:re,:],t_id,loc))
             
-    r3_time=list()
-    Q2_CPU=list()
-    for m in result:
-        Q2_CPU.append(m.result()[0])
-        r3_time.append(m.result()[1])
+    r3_time = [None] * num_threads
+    for t_id in range(num_threads):
+        [rb,re]       = row_partition_bounds(nrows,t_id,num_threads)
+        Q[rb:re,:]    = result[t_id].result()[0]
+        r3_time[t_id] = result[t_id].result()[1]
     t_t3_total[0].stop()
     
     for i in range(num_threads):
@@ -502,7 +503,6 @@ def tsqr_shared_mem_gpu_v2(A,num_threads):
         t_kernel_gpu[i] = r1_time[i][1] + r3_time[i][1]
         t_d2h[i] = r1_time[i][2] + r3_time[i][2]
 
-    Q=shared_mem_unblock(Q2_CPU)
     _perf_stat = [t_t1_total,t_t2_total,t_t3_total,t_h2d,t_kernel_gpu,t_d2h]
     return [Q,R,_perf_stat]
 
@@ -701,6 +701,7 @@ def tsqr_mpi_gpu_v3(Ar, comm):
     R=comm.bcast(R)
     Q2r= scatter_mat(Q2,comm)
     t_mpi_comm.stop()
+    comm.barrier()
 
     t_t3.start()
     [Q,ts]=block_gpu_matmult(Q1,Q2r,dev_id,loc={'A':'D','B':'H','C':'H'})
