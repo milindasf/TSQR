@@ -1,4 +1,4 @@
-# Parla + X for qr decomposition - taken from Parla code repo. 
+# Parla + X for qr decomposition - taken from Parla code repo.
 import sys
 import argparse
 import numpy as np
@@ -31,7 +31,7 @@ class profile_t:
 
     def start(self):
         self._pri_time = time()
-    
+
     def stop(self):
         self.seconds-=self._pri_time
         self.snap=-self._pri_time
@@ -41,7 +41,7 @@ class profile_t:
         self.seconds +=self._pri_time
         self.snap  += self._pri_time
         self.iter+=1
-    
+
     def reset(self):
         self.seconds=0
         self.snap=0
@@ -50,7 +50,7 @@ class profile_t:
 
 
 '''
-Computes the row-wise partition bounds. 
+Computes the row-wise partition bounds.
 '''
 def row_partition_bounds(nrows,rank,npes):
     assert(nrows >=npes)
@@ -63,7 +63,7 @@ def row_partition_bounds(nrows,rank,npes):
 @brief generates a partitioned random matrix
 matrix is partitioned row wise
 @param m - global number of rows
-@param n - global number of 
+@param n - global number of
 '''
 def partitioned_rand_mat(m,n,comm):
     rank = comm.Get_rank()
@@ -73,10 +73,10 @@ def partitioned_rand_mat(m,n,comm):
     return np.random.rand(num_rows,n)
 
 '''
-@brief Gather a row-wise partitioned matrix. 
-@param Ar: row wise partitioned matrix. 
+@brief Gather a row-wise partitioned matrix.
+@param Ar: row wise partitioned matrix.
 @param comm: MPI communicator
-Note: Assumes that matrix is row-wise partitioned. 
+Note: Assumes that matrix is row-wise partitioned.
 '''
 def gather_mat(Ar,comm,root=0):
     rank  = comm.Get_rank()
@@ -92,7 +92,7 @@ def gather_mat(Ar,comm,root=0):
     if(rank == root):
         A = np.zeros((rows,cols),dtype=Ar.dtype)
         #print("rows %d cols %d" %(rows,cols))
-    
+
     comm.Gatherv(Ar,(A,ss_counts),root=root)
     return A
 
@@ -112,19 +112,17 @@ def scatter_mat(A,comm,root=0):
     if(rank==root):
         rc=[A.shape[0], A.shape[1]]
         data_type = A.dtype
-    
+
     data_type=comm.bcast(data_type,root=root)
     rc=comm.bcast(rc,root=root)
 
     rows = rc[0]
     cols = rc[1]
 
-    # print(rc)
-    # print(data_type)
-    
+
     ## row begin and end for the scattering
     [rb,re]=row_partition_bounds(rows,rank,npes)
-    
+
     ss_counts = (re-rb)*cols
     ss_counts = comm.allgather(ss_counts)
 
@@ -145,11 +143,11 @@ def check_result_mpi(Ar,Qr,Rr,comm):
     QTQ   = np.matmul(np.transpose(Qr),Qr)
     QTQ_g = np.zeros((Qr.shape[1],Qr.shape[1]))
     comm.Reduce(QTQ,QTQ_g,root=0,op=MPI.SUM)
-    
+
     if(not rank):
         is_Q_valid = np.allclose(QTQ_g,np.eye(Qr.shape[1]))
-    
-    
+
+
     # Check R is upper triangular
     is_upper_R = np.allclose(Rr, np.triu(Rr))
     is_upper_R = comm.reduce(is_upper_R,root=0,op=MPI.LAND)
@@ -160,11 +158,11 @@ def check_result_mpi(Ar,Qr,Rr,comm):
 def check_result(A, Q, R):
     # Check product
     is_correct_prod = np.allclose(np.matmul(Q, R), A)
-    
+
     # Check orthonormal
     Q_check = np.matmul(Q.transpose(), Q)
     is_ortho_Q = np.allclose(Q_check, np.identity(NCOLS))
-    
+
     # Check upper
     is_upper_R = np.allclose(R, np.triu(R))
 
@@ -187,7 +185,7 @@ def qr_block_gpu(block, taskid):
     gpu_Q, gpu_R = cp.linalg.qr(block)
     cp.cuda.get_current_stream().synchronize()
     t_qr_gpu[taskid].stop()
-    
+
     # Transfer the data
     t_d2h[taskid].start()
     cpu_Q = gpu_Q #cp.asnumpy(gpu_Q)
@@ -214,7 +212,7 @@ def matmul_block_gpu(block_1, block_2, taskid):
     cp.cuda.get_current_stream().synchronize()
     t_mm_gpu[taskid].stop()
 
-    
+
     # Transfer the data
     t_d2h[taskid].start()
     cpu_Q = cp.asnumpy(gpu_Q)
@@ -232,11 +230,12 @@ async def tsqr_blocked_mpi(Ar,comm,block_size):
     # Check for block_size > ncols
     assert ncols <= block_size, "Block size must be greater than or equal to the number of columns in the input matrix"
 
+    nrows = Ar.shape[0]
     # Calculate the number of blocks
     nblocks = (nrows + block_size - 1) // block_size # ceiling division
     mapper = LDeviceSequenceBlocked(nblocks, placement=Ar)
     A_blocked = mapper.partition_tensor(Ar) # Partition A into blocks
-    
+
     # Initialize and partition empty array to store blocks (same partitioning scheme, share the mapper)
     # milinda : no need the partition buffer we can keep the Q1 in the GPU
     Q1_blocked = [None]*nblocks #mapper.partition_tensor(np.empty_like(A))
@@ -256,26 +255,24 @@ async def tsqr_blocked_mpi(Ar,comm,block_size):
         R1_upper = (i + 1) * ncols
 
         T1_MEMORY = None
-        ###@todo: Parla bug: refering this outside makes the array copy to the device. 
+        ###@todo: Parla bug: refering this outside makes the array copy to the device.
         # if PLACEMENT_STRING == 'gpu' or PLACEMENT_STRING == 'both':
         #     T1_MEMORY = int(4.2*A_blocked[i:i+1].nbytes) # Estimate based on empirical evidence
 
         dev_id = i % NGPUS
         @spawn(taskid=T1[i], placement=PLACEMENT[dev_id], memory=T1_MEMORY, vcus=ACUS)
         def t1():
-            #print("t1[", i, "] start on ", get_current_devices(), sep='', flush=True)
 
             # Copy the data to the processor
             t_h2d[i].start()
             A_block_local = A_blocked[i:i+1]
             cp.cuda.get_current_stream().synchronize()
             t_h2d[i].stop()
-            
+
             # Run the kernel. (Data is copied back within this call; timing annotations are added there)
             Q1_blocked[i], R1[R1_lower:R1_upper] = qr_block(A_block_local, i)
-            #print("t1[", i, "] end on ", get_current_devices(),  sep='', flush=True)
 
-    await t1
+    await T1
     t1_total.stop()
     comm.barrier()
     #t1_tot_end = time()
@@ -303,12 +300,13 @@ async def tsqr_blocked_mpi(Ar,comm,block_size):
     Q2, R = await t2
     t2_total.stop()
     comm.barrier()
-    
+
     t_comm_mpi.start()
     R   = comm.bcast(R)
     Q2 = scatter_mat(Q2,comm)
     t_comm_mpi.stop()
-    
+
+
     # Partition Q2 (same partitioning scheme, share the mapper)
     Q2_blocked = mapper.partition_tensor(Q2)
     t3_total.start()
@@ -322,7 +320,7 @@ async def tsqr_blocked_mpi(Ar,comm,block_size):
         Q_upper = (i + 1) * block_size # last row in block, exclusive
 
         T3_MEMORY = None
-        ###@todo: Parla bug: refering this outside makes the array copy to the device. 
+        ###@todo: Parla bug: refering this outside makes the array copy to the device.
         # if PLACEMENT_STRING == 'gpu' or PLACEMENT_STRING == 'both':
         #     T3_MEMORY = 4*Q1_blocked[i].nbytes # # This is a guess
 
@@ -337,7 +335,7 @@ async def tsqr_blocked_mpi(Ar,comm,block_size):
             Q2_block_local = Q2_blocked[i:i+1]
             cp.cuda.get_current_stream().synchronize()
             t_h2d[i].stop()
-            
+
             # Run the kernel. (Data is copied back within this call; timing annotations are added there)
             Q[Q_lower:Q_upper] = matmul_block(Q1_block_local, Q2_block_local, i)
             #print("t3[", i, "] end on ", get_current_devices(), sep='', flush=True)
@@ -355,7 +353,7 @@ def main():
         for iter in range(WARMUP + ITERS):
             np.random.seed(iter)
             Ar = partitioned_rand_mat(NROWS,NCOLS,comm)
-            
+
             t1_total.reset()
             t2_total.reset()
             t3_total.reset()
@@ -364,7 +362,7 @@ def main():
             for tt in ts:
                 for t in tt:
                     t.reset()
-            
+
             t_overall = profile_t("total")
             t_overall.start()
             Qr, Rr = await tsqr_blocked_mpi(Ar,comm, BLOCK_SIZE)
@@ -380,32 +378,32 @@ def main():
                             print(header)
 
                         t_header=True
-                    
+
                     t_    = f"{iter}"
                     t_dur = t_overall.seconds
                     t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
                     t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
                     if(not rank):
                         t_+=f"\t{t_min:.12f}\t{t_max:.12f}"
-                    
+
                     t_dur = t_comm_mpi.seconds
                     t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
                     t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
                     if(not rank):
                         t_+=f"\t{t_min:.12f}\t{t_max:.12f}"
-                    
+
                     t_dur = t1_total.seconds
                     t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
                     t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
                     if(not rank):
                         t_ += f"\t{t_min:.12f}\t{t_max:.12f}"
-                    
+
                     t_dur = t2_total.seconds
                     t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
                     t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
                     if(not rank):
                         t_ += f"\t{t_min:.12f}\t{t_max:.12f}"
-                    
+
                     t_dur = t3_total.seconds
                     t_min = comm.reduce(t_dur,root=0,op=MPI.MIN)
                     t_max = comm.reduce(t_dur,root=0,op=MPI.MAX)
@@ -427,7 +425,7 @@ def main():
 
                     if(not rank):
                         print(t_)
-            
+
             # barrier for qr2
             comm.barrier()
             # Check the results
@@ -438,7 +436,7 @@ def main():
                         print("\nCorrect result!\n")
                     else:
                         print("%***** ERROR: Incorrect final result!!! *****%")
-                
+
 
 
 
@@ -468,8 +466,11 @@ if __name__ == "__main__":
     PLACEMENT_STRING = args.placement
     CHECK_RESULT = args.check_result
     CSV = args.csv
-    
-    BLOCK_SIZE = NROWS // (1*NGPUS)
+
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    npes = comm.Get_size()
+    BLOCK_SIZE = (NROWS//npes) // (1*NGPUS)
     NTASKS=(NROWS + BLOCK_SIZE - 1) // BLOCK_SIZE
 
     # Set up PLACEMENT variable
@@ -488,12 +489,9 @@ if __name__ == "__main__":
         BLOCK_SIZE = int(NROWS / NGPUS)
     else:
         print("Invalid value for placement. Must be 'cpu' or 'gpu' or 'both' or 'puregpu'")
-    
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    npes = comm.Get_size()
 
-    t1_total   = profile_t("t1_total") 
+
+    t1_total   = profile_t("t1_total")
     t2_total   = profile_t("t2_total")
     t3_total   = profile_t("t3_total")
     t_comm_mpi = profile_t("mpi_comm")
@@ -504,7 +502,7 @@ if __name__ == "__main__":
     t_qr_gpu = [profile_t("qr_gpu")] * NTASKS
     t_mm_cpu = [profile_t("mm_cpu")] * NTASKS
     t_mm_gpu = [profile_t("mm_gpu")] * NTASKS
-    
+
     if(not rank):
         print('%**********************************************************************************************%\n')
         print("number of mpi tasks: ",npes)
